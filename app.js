@@ -2,9 +2,9 @@
 // TASKROOM - APP.JS
 // ======================================================
 
-// ==============================
+// ======================================================
 // FIREBASE IMPORTS
-// ==============================
+// ======================================================
 
 import {
     onAuthStateChanged,
@@ -36,22 +36,37 @@ import {
 
 
 // ======================================================
-// DOM ELEMENTS
+// DOM
 // ======================================================
 
 // Navigation
-const navItems = document.querySelectorAll(".nav-item");
+const navItems =
+    document.querySelectorAll(".nav-item");
 
-// Theme / Auth
-const themeToggle = document.getElementById("themeToggle");
-const authButton = document.getElementById("authButton");
+// Header
+const themeToggle =
+    document.getElementById("themeToggle");
+
+const authButton =
+    document.getElementById("authButton");
+
 
 // Pages
-const dashboardPage = document.getElementById("dashboardPage");
-const tasksPage = document.getElementById("tasksPage");
-const roomsPage = document.getElementById("roomsPage");
-const roomViewPage = document.getElementById("roomViewPage");
-const activityPage = document.getElementById("activityPage");
+const dashboardPage =
+    document.getElementById("dashboardPage");
+
+const tasksPage =
+    document.getElementById("tasksPage");
+
+const roomsPage =
+    document.getElementById("roomsPage");
+
+const roomViewPage =
+    document.getElementById("roomViewPage");
+
+const activityPage =
+    document.getElementById("activityPage");
+
 
 // Dashboard
 const dashboardGreeting =
@@ -96,7 +111,7 @@ const quickJoinRoom =
     document.getElementById("quickJoinRoom");
 
 
-// Personal Tasks
+// Personal tasks
 const taskForm =
     document.getElementById("taskForm");
 
@@ -121,7 +136,7 @@ const roomsList =
     document.getElementById("roomsList");
 
 
-// Room View
+// Room view
 const roomViewName =
     document.getElementById("roomViewName");
 
@@ -159,7 +174,7 @@ const backToRoomsBtn =
     document.getElementById("backToRoomsBtn");
 
 
-// Auth Modal
+// Auth modal
 const authModal =
     document.getElementById("authModal");
 
@@ -191,7 +206,7 @@ const authSwitch =
     document.getElementById("authSwitch");
 
 
-// Create Room Modal
+// Create room modal
 const roomModal =
     document.getElementById("roomModal");
 
@@ -214,7 +229,7 @@ const roomMessage =
     document.getElementById("roomMessage");
 
 
-// Join Room Modal
+// Join room modal
 const joinRoomModal =
     document.getElementById("joinRoomModal");
 
@@ -243,7 +258,7 @@ const toast =
 
 
 // ======================================================
-// GLOBAL STATE
+// STATE
 // ======================================================
 
 let currentUser = null;
@@ -270,7 +285,7 @@ let authMode = "login";
 
 
 // ======================================================
-// UTILITY
+// TOAST
 // ======================================================
 
 function showToast(message) {
@@ -278,6 +293,7 @@ function showToast(message) {
     if (!toast) return;
 
     toast.textContent = message;
+
     toast.classList.add("show");
 
     setTimeout(() => {
@@ -286,15 +302,25 @@ function showToast(message) {
 }
 
 
+// ======================================================
+// HTML ESCAPE
+// ======================================================
+
 function escapeHtml(value) {
 
-    const div = document.createElement("div");
+    const div =
+        document.createElement("div");
 
-    div.textContent = value ?? "";
+    div.textContent =
+        value ?? "";
 
     return div.innerHTML;
 }
 
+
+// ======================================================
+// DATE
+// ======================================================
 
 function formatDate(timestamp) {
 
@@ -304,13 +330,29 @@ function formatDate(timestamp) {
 
     let date;
 
-    if (timestamp.toDate) {
-        date = timestamp.toDate();
-    } else {
-        date = new Date(timestamp);
-    }
+    try {
 
-    return date.toLocaleString();
+        if (
+            timestamp &&
+            typeof timestamp.toDate === "function"
+        ) {
+            date =
+                timestamp.toDate();
+        } else {
+            date =
+                new Date(timestamp);
+        }
+
+        if (isNaN(date.getTime())) {
+            return "Just now";
+        }
+
+        return date.toLocaleString();
+
+    } catch {
+
+        return "Just now";
+    }
 }
 
 
@@ -321,31 +363,41 @@ function formatDate(timestamp) {
 function loadTheme() {
 
     const savedTheme =
-        localStorage.getItem("taskroom-theme");
+        localStorage.getItem(
+            "taskroom-theme"
+        );
 
     if (savedTheme === "dark") {
+
         document.body.classList.add("dark");
+
     } else {
+
         document.body.classList.remove("dark");
     }
 }
 
+loadTheme();
 
-themeToggle?.addEventListener("click", () => {
 
-    document.body.classList.toggle("dark");
+themeToggle?.addEventListener(
+    "click",
+    () => {
 
-    localStorage.setItem(
-        "taskroom-theme",
-        document.body.classList.contains("dark")
-            ? "dark"
-            : "light"
-    );
-});
+        document.body.classList.toggle("dark");
+
+        localStorage.setItem(
+            "taskroom-theme",
+            document.body.classList.contains("dark")
+                ? "dark"
+                : "light"
+        );
+    }
+);
 
 
 // ======================================================
-// AUTH HELPERS
+// LOGIN CHECK
 // ======================================================
 
 function requireLogin() {
@@ -354,7 +406,9 @@ function requireLogin() {
 
         openAuthModal();
 
-        showToast("Please login first.");
+        showToast(
+            "Please login first."
+        );
 
         return false;
     }
@@ -363,43 +417,50 @@ function requireLogin() {
 }
 
 
+// ======================================================
+// AUTH BUTTON
+// ======================================================
+
 function updateAuthButton() {
 
     if (!authButton) return;
 
-    if (currentUser) {
-
-        authButton.textContent = "Logout";
-
-    } else {
-
-        authButton.textContent = "Login";
-    }
+    authButton.textContent =
+        currentUser
+            ? "Logout"
+            : "Login";
 }
 
 
-authButton?.addEventListener("click", async () => {
+authButton?.addEventListener(
+    "click",
+    async () => {
 
-    if (currentUser) {
+        if (!currentUser) {
+
+            openAuthModal();
+
+            return;
+        }
 
         try {
 
             await signOut(auth);
 
-            showToast("Logged out successfully.");
+            showToast(
+                "Logged out successfully."
+            );
 
         } catch (error) {
 
             console.error(error);
 
-            showToast("Logout failed.");
+            showToast(
+                "Logout failed."
+            );
         }
-
-    } else {
-
-        openAuthModal();
     }
-});
+);
 
 
 // ======================================================
@@ -409,31 +470,55 @@ authButton?.addEventListener("click", async () => {
 function showPage(pageName) {
 
     const pages = {
-        dashboard: dashboardPage,
-        tasks: tasksPage,
-        rooms: roomsPage,
-        activity: activityPage,
-        roomView: roomViewPage
+
+        dashboard:
+            dashboardPage,
+
+        tasks:
+            tasksPage,
+
+        rooms:
+            roomsPage,
+
+        activity:
+            activityPage,
+
+        roomView:
+            roomViewPage
     };
 
-    Object.values(pages).forEach(page => {
 
-        if (page) {
-            page.classList.remove("active");
-        }
-    });
+    // Hide everything
+    Object.values(pages)
+        .forEach(page => {
+
+            if (!page) return;
+
+            page.classList.remove(
+                "active-page"
+            );
+
+            page.classList.remove(
+                "active"
+            );
+        });
 
 
-    const selectedPage = pages[pageName];
+    // Show selected page
+    const selectedPage =
+        pages[pageName];
+
 
     if (selectedPage) {
-        selectedPage.classList.add("active");
+
+        selectedPage.classList.add(
+            "active-page"
+        );
     }
 
 
+    // Navbar
     navItems.forEach(item => {
-
-        if (!item) return;
 
         item.classList.toggle(
             "active",
@@ -442,74 +527,97 @@ function showPage(pageName) {
     });
 
 
-    if (pageName !== "roomView") {
+    // Leaving room
+    if (
+        pageName !== "roomView" &&
+        currentRoomId
+    ) {
 
         resetRoomState();
     }
 }
 
 
-// Navigation
+// ======================================================
+// NAVIGATION CLICK
+// ======================================================
+
 navItems.forEach(item => {
 
-    if (!item) return;
+    item.addEventListener(
+        "click",
+        () => {
 
-    item.addEventListener("click", () => {
+            const page =
+                item.dataset.page;
 
-        const page =
-            item.dataset.page;
+            if (
+                page === "tasks" ||
+                page === "rooms" ||
+                page === "activity"
+            ) {
 
-        if (
-            page === "tasks" ||
-            page === "rooms" ||
-            page === "activity"
-        ) {
-
-            if (!requireLogin()) {
-                return;
+                if (!requireLogin()) {
+                    return;
+                }
             }
+
+            showPage(page);
         }
-
-        showPage(page);
-    });
+    );
 });
 
 
-// Dashboard buttons
-dashboardTasksBtn?.addEventListener("click", () => {
+// ======================================================
+// DASHBOARD QUICK BUTTONS
+// ======================================================
 
-    if (!requireLogin()) return;
+dashboardTasksBtn?.addEventListener(
+    "click",
+    () => {
 
-    showPage("tasks");
-});
+        if (!requireLogin()) return;
 
-
-quickAddTask?.addEventListener("click", () => {
-
-    if (!requireLogin()) return;
-
-    showPage("tasks");
-
-    setTimeout(() => {
-        taskInput?.focus();
-    }, 100);
-});
+        showPage("tasks");
+    }
+);
 
 
-quickCreateRoom?.addEventListener("click", () => {
+quickAddTask?.addEventListener(
+    "click",
+    () => {
 
-    if (!requireLogin()) return;
+        if (!requireLogin()) return;
 
-    openRoomModal();
-});
+        showPage("tasks");
+
+        setTimeout(() => {
+            taskInput?.focus();
+        }, 100);
+    }
+);
 
 
-quickJoinRoom?.addEventListener("click", () => {
+quickCreateRoom?.addEventListener(
+    "click",
+    () => {
 
-    if (!requireLogin()) return;
+        if (!requireLogin()) return;
 
-    openJoinRoomModal();
-});
+        openRoomModal();
+    }
+);
+
+
+quickJoinRoom?.addEventListener(
+    "click",
+    () => {
+
+        if (!requireLogin()) return;
+
+        openJoinRoomModal();
+    }
+);
 
 
 // ======================================================
@@ -525,7 +633,9 @@ function getGuestTasks() {
     try {
 
         return JSON.parse(
-            localStorage.getItem(GUEST_TASK_KEY)
+            localStorage.getItem(
+                GUEST_TASK_KEY
+            )
         ) || [];
 
     } catch {
@@ -545,7 +655,7 @@ function saveGuestTasks(tasks) {
 
 
 // ======================================================
-// PERSONAL TASKS
+// ADD PERSONAL TASK
 // ======================================================
 
 async function addPersonalTask(text) {
@@ -553,28 +663,46 @@ async function addPersonalTask(text) {
     if (!text.trim()) return;
 
 
+    // Guest
     if (!currentUser) {
 
         const tasks =
             getGuestTasks();
 
         tasks.unshift({
-            id: Date.now().toString(),
-            text: text.trim(),
-            completed: false,
-            createdAt: Date.now()
+
+            id:
+                Date.now().toString(),
+
+            text:
+                text.trim(),
+
+            completed:
+                false,
+
+            createdAt:
+                Date.now()
         });
+
 
         saveGuestTasks(tasks);
 
-        loadPersonalTasks(null);
+        personalTasks =
+            tasks;
 
-        showToast("Task added.");
+        renderPersonalTasks();
+
+        updateDashboard();
+
+        showToast(
+            "Task added."
+        );
 
         return;
     }
 
 
+    // Firebase
     try {
 
         await addDoc(
@@ -585,51 +713,74 @@ async function addPersonalTask(text) {
                 "tasks"
             ),
             {
-                text: text.trim(),
-                completed: false,
-                createdAt: serverTimestamp()
+                text:
+                    text.trim(),
+
+                completed:
+                    false,
+
+                createdAt:
+                    serverTimestamp()
             }
         );
 
-        showToast("Task added.");
+        showToast(
+            "Task added."
+        );
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Add task error:",
+            error
+        );
 
-        showToast("Could not add task.");
+        showToast(
+            "Could not add task."
+        );
     }
 }
 
 
-taskForm?.addEventListener("submit", async event => {
+// ======================================================
+// PERSONAL TASK FORM
+// ======================================================
 
-    event.preventDefault();
+taskForm?.addEventListener(
+    "submit",
+    async event => {
 
-    const text =
-        taskInput?.value.trim();
+        event.preventDefault();
 
-    if (!text) return;
+        const text =
+            taskInput?.value.trim();
 
-    await addPersonalTask(text);
+        if (!text) return;
 
-    if (taskInput) {
-        taskInput.value = "";
+        await addPersonalTask(text);
+
+        if (taskInput) {
+            taskInput.value = "";
+        }
     }
-});
+);
 
 
 // ======================================================
-// LOAD PERSONAL TASKS
+// PERSONAL TASK LISTENER
 // ======================================================
 
 function stopPersonalTaskListener() {
 
-    if (unsubscribePersonalTasks) {
+    if (
+        typeof unsubscribePersonalTasks ===
+        "function"
+    ) {
 
         unsubscribePersonalTasks();
 
-        unsubscribePersonalTasks = null;
+        unsubscribePersonalTasks =
+            null;
     }
 }
 
@@ -661,33 +812,42 @@ function loadPersonalTasks(user) {
         );
 
 
-    const q =
+    const tasksQuery =
         query(
             tasksRef,
-            orderBy("createdAt", "desc")
+            orderBy(
+                "createdAt",
+                "desc"
+            )
         );
 
 
     unsubscribePersonalTasks =
         onSnapshot(
-            q,
+            tasksQuery,
+
             snapshot => {
 
                 personalTasks =
-                    snapshot.docs.map(item => ({
-                        id: item.id,
-                        ...item.data()
-                    }));
+                    snapshot.docs.map(
+                        item => ({
+                            id:
+                                item.id,
+
+                            ...item.data()
+                        })
+                    );
+
 
                 renderPersonalTasks();
 
                 updateDashboard();
-
             },
+
             error => {
 
                 console.error(
-                    "Personal task listener error:",
+                    "Personal task listener:",
                     error
                 );
 
@@ -700,12 +860,15 @@ function loadPersonalTasks(user) {
 
 
 // ======================================================
-// RENDER PERSONAL TASKS
+// FILTER
 // ======================================================
 
 function getFilteredTasks() {
 
-    if (currentFilter === "active") {
+    if (
+        currentFilter ===
+        "active"
+    ) {
 
         return personalTasks.filter(
             task => !task.completed
@@ -713,7 +876,10 @@ function getFilteredTasks() {
     }
 
 
-    if (currentFilter === "completed") {
+    if (
+        currentFilter ===
+        "completed"
+    ) {
 
         return personalTasks.filter(
             task => task.completed
@@ -724,6 +890,10 @@ function getFilteredTasks() {
     return personalTasks;
 }
 
+
+// ======================================================
+// RENDER PERSONAL TASKS
+// ======================================================
 
 function renderPersonalTasks() {
 
@@ -750,8 +920,12 @@ function renderPersonalTasks() {
         tasks.map(task => `
 
             <div
-                class="task-item ${task.completed ? "completed" : ""}"
-                data-task-id="${task.id}"
+                class="task-item ${
+                    task.completed
+                        ? "completed"
+                        : ""
+                }"
+                data-task-id="${escapeHtml(task.id)}"
             >
 
                 <label class="task-check">
@@ -759,13 +933,18 @@ function renderPersonalTasks() {
                     <input
                         type="checkbox"
                         class="personal-task-check"
-                        data-id="${task.id}"
-                        ${task.completed ? "checked" : ""}
+                        data-id="${escapeHtml(task.id)}"
+                        ${
+                            task.completed
+                                ? "checked"
+                                : ""
+                        }
                     >
 
                     <span></span>
 
                 </label>
+
 
                 <div class="task-content">
 
@@ -774,14 +953,17 @@ function renderPersonalTasks() {
                     </div>
 
                     <div class="task-date">
-                        ${formatDate(task.createdAt)}
+                        ${formatDate(
+                            task.createdAt
+                        )}
                     </div>
 
                 </div>
 
+
                 <button
                     class="task-delete"
-                    data-id="${task.id}"
+                    data-id="${escapeHtml(task.id)}"
                     type="button"
                 >
                     ×
@@ -792,11 +974,14 @@ function renderPersonalTasks() {
         `).join("");
 
 
+    // Checkbox
     tasksList
-        .querySelectorAll(".personal-task-check")
+        .querySelectorAll(
+            ".personal-task-check"
+        )
         .forEach(input => {
 
-            input?.addEventListener(
+            input.addEventListener(
                 "change",
                 async () => {
 
@@ -809,11 +994,14 @@ function renderPersonalTasks() {
         });
 
 
+    // Delete
     tasksList
-        .querySelectorAll(".task-delete")
+        .querySelectorAll(
+            ".task-delete"
+        )
         .forEach(button => {
 
-            button?.addEventListener(
+            button.addEventListener(
                 "click",
                 async () => {
 
@@ -827,7 +1015,7 @@ function renderPersonalTasks() {
 
 
 // ======================================================
-// PERSONAL TASK ACTIONS
+// TOGGLE PERSONAL TASK
 // ======================================================
 
 async function togglePersonalTask(
@@ -842,22 +1030,23 @@ async function togglePersonalTask(
 
         const task =
             tasks.find(
-                item => item.id === taskId
+                item =>
+                    item.id === taskId
             );
 
-        if (task) {
+        if (!task) return;
 
-            task.completed =
-                completed;
+        task.completed =
+            completed;
 
-            saveGuestTasks(tasks);
+        saveGuestTasks(tasks);
 
-            personalTasks = tasks;
+        personalTasks =
+            tasks;
 
-            renderPersonalTasks();
+        renderPersonalTasks();
 
-            updateDashboard();
-        }
+        updateDashboard();
 
         return;
     }
@@ -889,7 +1078,13 @@ async function togglePersonalTask(
 }
 
 
-async function deletePersonalTask(taskId) {
+// ======================================================
+// DELETE PERSONAL TASK
+// ======================================================
+
+async function deletePersonalTask(
+    taskId
+) {
 
     if (!currentUser) {
 
@@ -898,18 +1093,24 @@ async function deletePersonalTask(taskId) {
 
         const filtered =
             tasks.filter(
-                task => task.id !== taskId
+                task =>
+                    task.id !== taskId
             );
 
-        saveGuestTasks(filtered);
+        saveGuestTasks(
+            filtered
+        );
 
-        personalTasks = filtered;
+        personalTasks =
+            filtered;
 
         renderPersonalTasks();
 
         updateDashboard();
 
-        showToast("Task deleted.");
+        showToast(
+            "Task deleted."
+        );
 
         return;
     }
@@ -927,7 +1128,9 @@ async function deletePersonalTask(taskId) {
             )
         );
 
-        showToast("Task deleted.");
+        showToast(
+            "Task deleted."
+        );
 
     } catch (error) {
 
@@ -941,30 +1144,34 @@ async function deletePersonalTask(taskId) {
 
 
 // ======================================================
-// FILTERS
+// FILTER BUTTONS
 // ======================================================
 
 filterButtons.forEach(button => {
 
-    if (!button) return;
+    button.addEventListener(
+        "click",
+        () => {
 
-    button.addEventListener("click", () => {
+            filterButtons.forEach(
+                item => {
+                    item.classList.remove(
+                        "active"
+                    );
+                }
+            );
 
-        filterButtons.forEach(item => {
+            button.classList.add(
+                "active"
+            );
 
-            if (item) {
-                item.classList.remove("active");
-            }
-        });
+            currentFilter =
+                button.dataset.filter ||
+                "all";
 
-
-        button.classList.add("active");
-
-        currentFilter =
-            button.dataset.filter || "all";
-
-        renderPersonalTasks();
-    });
+            renderPersonalTasks();
+        }
+    );
 });
 
 
@@ -994,15 +1201,18 @@ function updateDashboard() {
 
 
     if (totalTasks) {
-        totalTasks.textContent = total;
+        totalTasks.textContent =
+            total;
     }
 
     if (activeTasks) {
-        activeTasks.textContent = active;
+        activeTasks.textContent =
+            active;
     }
 
     if (completedTasks) {
-        completedTasks.textContent = completed;
+        completedTasks.textContent =
+            completed;
     }
 
     if (completionPercent) {
@@ -1025,11 +1235,11 @@ function updateDashboard() {
 
         if (currentUser) {
 
-            const email =
-                currentUser.email || "";
-
             dashboardGreeting.textContent =
-                `Welcome back, ${email}`;
+                `Welcome back, ${
+                    currentUser.email || ""
+                }`;
+
         } else {
 
             dashboardGreeting.textContent =
@@ -1044,12 +1254,21 @@ function updateDashboard() {
             currentUser
                 ? "Cloud Sync Active"
                 : "Guest Mode";
+
+        cloudStatus.classList.toggle(
+            "connected",
+            !!currentUser
+        );
     }
 
 
     renderRecentTasks();
 }
 
+
+// ======================================================
+// RECENT TASKS
+// ======================================================
 
 function renderRecentTasks() {
 
@@ -1075,14 +1294,12 @@ function renderRecentTasks() {
     recentTasks.innerHTML =
         recent.map(task => `
 
-            <div class="recent-task ${
-                task.completed
-                    ? "completed"
-                    : ""
-            }">
+            <div class="recent-task">
 
                 <span>
-                    ${escapeHtml(task.text)}
+                    ${escapeHtml(
+                        task.text
+                    )}
                 </span>
 
                 <span>
@@ -1107,18 +1324,37 @@ function openAuthModal() {
 
     if (!authModal) return;
 
-    authModal.classList.add("active");
+    authModal.classList.remove(
+        "hidden"
+    );
 
-    authMessage &&
-        (authMessage.textContent = "");
+    authModal.classList.add(
+        "active"
+    );
 
-    emailInput?.focus();
+    if (authMessage) {
+        authMessage.textContent = "";
+    }
+
+    updateAuthModeUI();
+
+    setTimeout(() => {
+        emailInput?.focus();
+    }, 100);
 }
 
 
 function closeAuth() {
 
-    authModal?.classList.remove("active");
+    if (!authModal) return;
+
+    authModal.classList.remove(
+        "active"
+    );
+
+    authModal.classList.add(
+        "hidden"
+    );
 }
 
 
@@ -1127,6 +1363,10 @@ closeAuthModal?.addEventListener(
     closeAuth
 );
 
+
+// ======================================================
+// AUTH MODE
+// ======================================================
 
 function updateAuthModeUI() {
 
@@ -1195,6 +1435,10 @@ authSwitch?.addEventListener(
 );
 
 
+// ======================================================
+// AUTH FORM
+// ======================================================
+
 authForm?.addEventListener(
     "submit",
     async event => {
@@ -1222,7 +1466,15 @@ authForm?.addEventListener(
 
         try {
 
-            if (authMode === "login") {
+            if (authSubmit) {
+                authSubmit.disabled = true;
+            }
+
+
+            if (
+                authMode ===
+                "login"
+            ) {
 
                 await signInWithEmailAndPassword(
                     auth,
@@ -1253,7 +1505,6 @@ authForm?.addEventListener(
                 } catch (verificationError) {
 
                     console.warn(
-                        "Verification email failed:",
                         verificationError
                     );
                 }
@@ -1267,56 +1518,63 @@ authForm?.addEventListener(
 
             closeAuth();
 
-
-            if (authForm) {
-                authForm.reset();
-            }
+            authForm.reset();
 
         } catch (error) {
 
-            console.error(error);
+            console.error(
+                "Auth error:",
+                error
+            );
+
 
             let message =
                 "Authentication failed.";
 
 
-            if (
-                error.code ===
-                "auth/invalid-credential"
-            ) {
+            switch (error.code) {
 
-                message =
-                    "Invalid email or password.";
+                case "auth/invalid-credential":
+                    message =
+                        "Invalid email or password.";
+                    break;
 
-            } else if (
-                error.code ===
-                "auth/email-already-in-use"
-            ) {
+                case "auth/email-already-in-use":
+                    message =
+                        "Email already in use.";
+                    break;
 
-                message =
-                    "Email already in use.";
+                case "auth/weak-password":
+                    message =
+                        "Password is too weak.";
+                    break;
 
-            } else if (
-                error.code ===
-                "auth/weak-password"
-            ) {
+                case "auth/invalid-email":
+                    message =
+                        "Invalid email address.";
+                    break;
 
-                message =
-                    "Password is too weak.";
+                case "auth/user-not-found":
+                    message =
+                        "Account not found.";
+                    break;
 
-            } else if (
-                error.code ===
-                "auth/invalid-email"
-            ) {
-
-                message =
-                    "Invalid email address.";
+                default:
+                    message =
+                        error.message ||
+                        "Authentication failed.";
             }
 
 
             if (authMessage) {
                 authMessage.textContent =
                     message;
+            }
+
+        } finally {
+
+            if (authSubmit) {
+                authSubmit.disabled = false;
             }
         }
     }
@@ -1335,7 +1593,11 @@ function generateRoomCode() {
     let code = "TR-";
 
 
-    for (let i = 0; i < 5; i++) {
+    for (
+        let i = 0;
+        i < 5;
+        i++
+    ) {
 
         code +=
             chars[
@@ -1353,39 +1615,49 @@ function generateRoomCode() {
 
 async function generateUniqueRoomId() {
 
-    for (let attempt = 0; attempt < 5; attempt++) {
+    for (
+        let attempt = 0;
+        attempt < 10;
+        attempt++
+    ) {
 
         const roomId =
             generateRoomCode();
 
         const roomRef =
-            doc(db, "rooms", roomId);
+            doc(
+                db,
+                "rooms",
+                roomId
+            );
 
-        const existingRoom =
+        const existing =
             await getDoc(roomRef);
 
 
-        if (!existingRoom.exists()) {
-
+        if (!existing.exists()) {
             return roomId;
         }
     }
 
 
     throw new Error(
-        "Could not generate a unique room ID."
+        "Could not generate unique room code."
     );
 }
 
 
 // ======================================================
-// SHA-256 ROOM PASSWORD
+// ROOM PASSWORD HASH
 // ======================================================
 
-async function hashRoomPassword(password) {
+async function hashRoomPassword(
+    password
+) {
 
     const data =
-        new TextEncoder().encode(password);
+        new TextEncoder()
+            .encode(password);
 
     const hashBuffer =
         await crypto.subtle.digest(
@@ -1393,13 +1665,9 @@ async function hashRoomPassword(password) {
             data
         );
 
-    const hashArray =
-        Array.from(
-            new Uint8Array(hashBuffer)
-        );
-
-
-    return hashArray
+    return Array.from(
+        new Uint8Array(hashBuffer)
+    )
         .map(byte =>
             byte
                 .toString(16)
@@ -1410,25 +1678,42 @@ async function hashRoomPassword(password) {
 
 
 // ======================================================
-// ROOM MODAL
+// CREATE ROOM MODAL
 // ======================================================
 
 function openRoomModal() {
 
     if (!roomModal) return;
 
-    roomModal.classList.add("active");
+    roomModal.classList.remove(
+        "hidden"
+    );
 
-    roomMessage &&
-        (roomMessage.textContent = "");
+    roomModal.classList.add(
+        "active"
+    );
 
-    roomNameInput?.focus();
+    if (roomMessage) {
+        roomMessage.textContent = "";
+    }
+
+    setTimeout(() => {
+        roomNameInput?.focus();
+    }, 100);
 }
 
 
 function closeRoom() {
 
-    roomModal?.classList.remove("active");
+    if (!roomModal) return;
+
+    roomModal.classList.remove(
+        "active"
+    );
+
+    roomModal.classList.add(
+        "hidden"
+    );
 }
 
 
@@ -1460,7 +1745,9 @@ roomForm?.addEventListener(
         event.preventDefault();
 
 
-        if (!requireLogin()) return;
+        if (!requireLogin()) {
+            return;
+        }
 
 
         const roomName =
@@ -1498,81 +1785,92 @@ roomForm?.addEventListener(
                 );
 
 
-            const roomRef =
+            // Room document
+            await setDoc(
                 doc(
                     db,
                     "rooms",
                     roomId
-                );
-
-
-            await setDoc(
-                roomRef,
+                ),
                 {
-                    name: roomName,
-                    ownerId: currentUser.uid,
-                    ownerEmail: currentUser.email,
+                    name:
+                        roomName,
+
+                    ownerId:
+                        currentUser.uid,
+
+                    ownerEmail:
+                        currentUser.email,
+
                     passwordHash,
-                    createdAt: serverTimestamp()
+
+                    createdAt:
+                        serverTimestamp()
                 }
             );
 
 
-            const memberRef =
+            // Owner member
+            await setDoc(
                 doc(
                     db,
                     "rooms",
                     roomId,
                     "members",
                     currentUser.uid
-                );
-
-
-            await setDoc(
-                memberRef,
+                ),
                 {
-                    uid: currentUser.uid,
-                    email: currentUser.email,
-                    role: "owner",
-                    joinedAt: serverTimestamp()
+                    uid:
+                        currentUser.uid,
+
+                    email:
+                        currentUser.email,
+
+                    role:
+                        "owner",
+
+                    joinedAt:
+                        serverTimestamp()
                 }
             );
 
 
-            const userRoomRef =
+            // User room reference
+            await setDoc(
                 doc(
                     db,
                     "userRooms",
                     currentUser.uid,
                     "rooms",
                     roomId
-                );
-
-
-            await setDoc(
-                userRoomRef,
+                ),
                 {
                     roomId,
+
                     roomName,
-                    role: "owner",
-                    joinedAt: serverTimestamp()
+
+                    role:
+                        "owner",
+
+                    joinedAt:
+                        serverTimestamp()
                 }
             );
 
 
-            if (roomForm) {
-                roomForm.reset();
-            }
-
+            roomForm?.reset();
 
             closeRoom();
+
 
             showToast(
                 `Room created: ${roomId}`
             );
 
 
-            await openRoom(roomId);
+            await openRoom(
+                roomId
+            );
 
         } catch (error) {
 
@@ -1580,7 +1878,6 @@ roomForm?.addEventListener(
                 "Create room error:",
                 error
             );
-
 
             if (roomMessage) {
                 roomMessage.textContent =
@@ -1603,7 +1900,10 @@ roomForm?.addEventListener(
 
 function stopRoomsListener() {
 
-    if (unsubscribeRooms) {
+    if (
+        typeof unsubscribeRooms ===
+        "function"
+    ) {
 
         unsubscribeRooms();
 
@@ -1619,9 +1919,7 @@ function loadMyRooms() {
 
     if (!currentUser) {
 
-        if (roomsList) {
-            roomsList.innerHTML = "";
-        }
+        renderRooms([]);
 
         return;
     }
@@ -1639,24 +1937,28 @@ function loadMyRooms() {
     unsubscribeRooms =
         onSnapshot(
             roomsRef,
+
             snapshot => {
 
                 const rooms =
                     snapshot.docs.map(
                         item => ({
-                            id: item.id,
+                            id:
+                                item.id,
+
                             ...item.data()
                         })
                     );
 
-
-                renderRooms(rooms);
-
+                renderRooms(
+                    rooms
+                );
             },
+
             error => {
 
                 console.error(
-                    "Rooms listener error:",
+                    "Rooms listener:",
                     error
                 );
 
@@ -1672,7 +1974,9 @@ function loadMyRooms() {
 // RENDER ROOMS
 // ======================================================
 
-function renderRooms(rooms = []) {
+function renderRooms(
+    rooms = []
+) {
 
     if (!roomsList) return;
 
@@ -1680,8 +1984,15 @@ function renderRooms(rooms = []) {
     if (!currentUser) {
 
         roomsList.innerHTML = `
-            <div class="empty-state">
-                Login to see your rooms.
+            <div class="rooms-empty">
+
+                <h2>Login required</h2>
+
+                <p>
+                    Login to create and manage
+                    your TaskRoom rooms.
+                </p>
+
             </div>
         `;
 
@@ -1692,10 +2003,57 @@ function renderRooms(rooms = []) {
     if (!rooms.length) {
 
         roomsList.innerHTML = `
-            <div class="empty-state">
-                You haven't joined any room yet.
+            <div class="rooms-empty">
+
+                <h2>No rooms yet</h2>
+
+                <p>
+                    Create a new room or join
+                    an existing room using its code.
+                </p>
+
+                <div class="empty-actions">
+
+                    <button
+                        type="button"
+                        class="primary-btn"
+                        id="emptyCreateRoom"
+                    >
+                        Create Room
+                    </button>
+
+                    <button
+                        type="button"
+                        class="secondary-btn"
+                        id="emptyJoinRoom"
+                    >
+                        Join Room
+                    </button>
+
+                </div>
+
             </div>
         `;
+
+
+        document
+            .getElementById(
+                "emptyCreateRoom"
+            )
+            ?.addEventListener(
+                "click",
+                openRoomModal
+            );
+
+
+        document
+            .getElementById(
+                "emptyJoinRoom"
+            )
+            ?.addEventListener(
+                "click",
+                openJoinRoomModal
+            );
 
         return;
     }
@@ -1706,42 +2064,52 @@ function renderRooms(rooms = []) {
 
             <div
                 class="room-card"
-                data-room-id="${room.id}"
+                data-room-id="${escapeHtml(
+                    room.id
+                )}"
             >
 
-                <div class="room-card-info">
+                <h3>
+                    ${escapeHtml(
+                        room.roomName ||
+                        "Unnamed Room"
+                    )}
+                </h3>
 
-                    <h3>
-                        ${escapeHtml(room.roomName || "Unnamed Room")}
-                    </h3>
+                <p>
+                    Room Code:
+                    <strong>
+                        ${escapeHtml(
+                            room.id
+                        )}
+                    </strong>
+                </p>
 
-                    <p>
-                        Room Code:
-                        <strong>
-                            ${escapeHtml(room.id)}
-                        </strong>
-                    </p>
-
-                    <span class="room-role">
-                        ${escapeHtml(room.role || "member")}
-                    </span>
-
-                </div>
+                <span class="room-role">
+                    ${escapeHtml(
+                        room.role ||
+                        "member"
+                    )}
+                </span>
 
                 <div class="room-card-actions">
 
                     <button
-                        class="copy-room-code"
-                        data-code="${escapeHtml(room.id)}"
                         type="button"
+                        class="secondary-btn copy-room-code"
+                        data-code="${escapeHtml(
+                            room.id
+                        )}"
                     >
                         Copy Code
                     </button>
 
                     <button
-                        class="open-room-btn"
-                        data-room-id="${escapeHtml(room.id)}"
                         type="button"
+                        class="primary-btn open-room-btn"
+                        data-room-id="${escapeHtml(
+                            room.id
+                        )}"
                     >
                         Open
                     </button>
@@ -1753,18 +2121,20 @@ function renderRooms(rooms = []) {
         `).join("");
 
 
+    // Copy
     roomsList
-        .querySelectorAll(".copy-room-code")
+        .querySelectorAll(
+            ".copy-room-code"
+        )
         .forEach(button => {
 
-            button?.addEventListener(
+            button.addEventListener(
                 "click",
                 async () => {
 
-                    const code =
-                        button.dataset.code;
-
-                    await copyText(code);
+                    await copyText(
+                        button.dataset.code
+                    );
 
                     showToast(
                         "Room code copied."
@@ -1774,11 +2144,14 @@ function renderRooms(rooms = []) {
         });
 
 
+    // Open
     roomsList
-        .querySelectorAll(".open-room-btn")
+        .querySelectorAll(
+            ".open-room-btn"
+        )
         .forEach(button => {
 
-            button?.addEventListener(
+            button.addEventListener(
                 "click",
                 async () => {
 
@@ -1792,34 +2165,57 @@ function renderRooms(rooms = []) {
 
 
 // ======================================================
-// COPY TEXT
+// COPY
 // ======================================================
 
 async function copyText(text) {
 
     try {
 
-        await navigator.clipboard.writeText(
-            text
-        );
+        if (
+            navigator.clipboard &&
+            window.isSecureContext
+        ) {
+
+            await navigator.clipboard
+                .writeText(text);
+
+            return;
+        }
 
     } catch {
+        // fallback below
+    }
 
-        const textarea =
-            document.createElement("textarea");
 
-        textarea.value = text;
-
-        document.body.appendChild(
-            textarea
+    const textarea =
+        document.createElement(
+            "textarea"
         );
 
-        textarea.select();
+    textarea.value = text;
 
+    textarea.style.position =
+        "fixed";
+
+    textarea.style.opacity =
+        "0";
+
+    document.body.appendChild(
+        textarea
+    );
+
+    textarea.focus();
+
+    textarea.select();
+
+    try {
         document.execCommand("copy");
-
-        textarea.remove();
+    } catch {
+        // ignored
     }
+
+    textarea.remove();
 }
 
 
@@ -1829,7 +2225,9 @@ copyRoomViewCode?.addEventListener(
 
         if (!currentRoomId) return;
 
-        await copyText(currentRoomId);
+        await copyText(
+            currentRoomId
+        );
 
         showToast(
             "Room code copied."
@@ -1846,18 +2244,35 @@ function openJoinRoomModal() {
 
     if (!joinRoomModal) return;
 
-    joinRoomModal.classList.add("active");
+    joinRoomModal.classList.remove(
+        "hidden"
+    );
 
-    joinRoomMessage &&
-        (joinRoomMessage.textContent = "");
+    joinRoomModal.classList.add(
+        "active"
+    );
 
-    joinRoomCodeInput?.focus();
+    if (joinRoomMessage) {
+        joinRoomMessage.textContent = "";
+    }
+
+    setTimeout(() => {
+        joinRoomCodeInput?.focus();
+    }, 100);
 }
 
 
 function closeJoinRoom() {
 
-    joinRoomModal?.classList.remove("active");
+    if (!joinRoomModal) return;
+
+    joinRoomModal.classList.remove(
+        "active"
+    );
+
+    joinRoomModal.classList.add(
+        "hidden"
+    );
 }
 
 
@@ -1889,7 +2304,9 @@ joinRoomForm?.addEventListener(
         event.preventDefault();
 
 
-        if (!requireLogin()) return;
+        if (!requireLogin()) {
+            return;
+        }
 
 
         const roomCode =
@@ -1929,7 +2346,9 @@ joinRoomForm?.addEventListener(
 
 
             const roomDoc =
-                await getDoc(roomRef);
+                await getDoc(
+                    roomRef
+                );
 
 
             if (!roomDoc.exists()) {
@@ -1945,6 +2364,20 @@ joinRoomForm?.addEventListener(
 
             const roomData =
                 roomDoc.data();
+
+
+            // Legacy room detection
+            if (
+                !roomData.passwordHash
+            ) {
+
+                if (joinRoomMessage) {
+                    joinRoomMessage.textContent =
+                        "This is an old room. Please create a new room.";
+                }
+
+                return;
+            }
 
 
             const passwordHash =
@@ -1967,23 +2400,27 @@ joinRoomForm?.addEventListener(
             }
 
 
-            const memberRef =
+            // Add member
+            await setDoc(
                 doc(
                     db,
                     "rooms",
                     roomCode,
                     "members",
                     currentUser.uid
-                );
-
-
-            await setDoc(
-                memberRef,
+                ),
                 {
-                    uid: currentUser.uid,
-                    email: currentUser.email,
-                    role: "member",
-                    joinedAt: serverTimestamp()
+                    uid:
+                        currentUser.uid,
+
+                    email:
+                        currentUser.email,
+
+                    role:
+                        "member",
+
+                    joinedAt:
+                        serverTimestamp()
                 },
                 {
                     merge: true
@@ -1991,23 +2428,27 @@ joinRoomForm?.addEventListener(
             );
 
 
-            const userRoomRef =
+            // Add room to user's list
+            await setDoc(
                 doc(
                     db,
                     "userRooms",
                     currentUser.uid,
                     "rooms",
                     roomCode
-                );
-
-
-            await setDoc(
-                userRoomRef,
+                ),
                 {
-                    roomId: roomCode,
-                    roomName: roomData.name,
-                    role: "member",
-                    joinedAt: serverTimestamp()
+                    roomId:
+                        roomCode,
+
+                    roomName:
+                        roomData.name,
+
+                    role:
+                        "member",
+
+                    joinedAt:
+                        serverTimestamp()
                 },
                 {
                     merge: true
@@ -2015,19 +2456,19 @@ joinRoomForm?.addEventListener(
             );
 
 
-            if (joinRoomForm) {
-                joinRoomForm.reset();
-            }
-
+            joinRoomForm?.reset();
 
             closeJoinRoom();
+
 
             showToast(
                 `Joined ${roomCode}`
             );
 
 
-            await openRoom(roomCode);
+            await openRoom(
+                roomCode
+            );
 
         } catch (error) {
 
@@ -2035,7 +2476,6 @@ joinRoomForm?.addEventListener(
                 "Join room error:",
                 error
             );
-
 
             if (joinRoomMessage) {
                 joinRoomMessage.textContent =
@@ -2058,19 +2498,27 @@ joinRoomForm?.addEventListener(
 
 function stopRoomListeners() {
 
-    if (unsubscribeRoomMembers) {
+    if (
+        typeof unsubscribeRoomMembers ===
+        "function"
+    ) {
 
         unsubscribeRoomMembers();
 
-        unsubscribeRoomMembers = null;
+        unsubscribeRoomMembers =
+            null;
     }
 
 
-    if (unsubscribeRoomTasks) {
+    if (
+        typeof unsubscribeRoomTasks ===
+        "function"
+    ) {
 
         unsubscribeRoomTasks();
 
-        unsubscribeRoomTasks = null;
+        unsubscribeRoomTasks =
+            null;
     }
 }
 
@@ -2081,34 +2529,32 @@ function clearRoomUI() {
         sharedTaskInput.value = "";
     }
 
-
     if (roomViewName) {
         roomViewName.textContent = "";
     }
-
 
     if (roomViewCode) {
         roomViewCode.textContent = "";
     }
 
-
     if (roomRoleBadge) {
         roomRoleBadge.textContent = "";
     }
-
 
     if (membersList) {
         membersList.innerHTML = "";
     }
 
-
     if (sharedTasksList) {
         sharedTasksList.innerHTML = "";
     }
 
-
     if (memberCount) {
         memberCount.textContent = "0";
+    }
+
+    if (deleteRoomBtn) {
+        deleteRoomBtn.style.display = "";
     }
 }
 
@@ -2133,12 +2579,31 @@ function resetRoomState() {
 
 async function openRoom(roomId) {
 
-    if (!requireLogin()) return;
+    if (!requireLogin()) {
+        return;
+    }
+
+
+    if (!roomId) {
+        showToast(
+            "Invalid room."
+        );
+
+        return;
+    }
 
 
     try {
 
-        resetRoomState();
+        // Stop previous room listeners
+        stopRoomListeners();
+
+        // Clear previous room input
+        clearRoomUI();
+
+        currentRoomId = null;
+        currentRoomData = null;
+        currentRoomRole = null;
 
 
         const roomRef =
@@ -2150,7 +2615,9 @@ async function openRoom(roomId) {
 
 
         const roomDoc =
-            await getDoc(roomRef);
+            await getDoc(
+                roomRef
+            );
 
 
         if (!roomDoc.exists()) {
@@ -2178,7 +2645,9 @@ async function openRoom(roomId) {
 
 
         const memberDoc =
-            await getDoc(memberRef);
+            await getDoc(
+                memberRef
+            );
 
 
         if (!memberDoc.exists()) {
@@ -2202,20 +2671,20 @@ async function openRoom(roomId) {
             roomData;
 
         currentRoomRole =
-            memberData.role || "member";
+            memberData.role ||
+            "member";
 
 
         if (roomViewName) {
             roomViewName.textContent =
-                roomData.name || "Room";
+                roomData.name ||
+                "Room";
         }
-
 
         if (roomViewCode) {
             roomViewCode.textContent =
                 roomId;
         }
-
 
         if (roomRoleBadge) {
             roomRoleBadge.textContent =
@@ -2232,17 +2701,24 @@ async function openRoom(roomId) {
         }
 
 
+        // IMPORTANT
         showPage("roomView");
 
 
-        // Re-set room page active because showPage()
-        // clears room state when leaving normal pages.
-        roomViewPage?.classList.add("active");
+        loadRoomMembers(
+            roomId
+        );
+
+        loadSharedTasks(
+            roomId
+        );
 
 
-        loadRoomMembers(roomId);
+        // Focus shared input
+        setTimeout(() => {
+            sharedTaskInput?.focus();
+        }, 100);
 
-        loadSharedTasks(roomId);
 
     } catch (error) {
 
@@ -2282,24 +2758,29 @@ function loadRoomMembers(roomId) {
     unsubscribeRoomMembers =
         onSnapshot(
             membersRef,
+
             snapshot => {
 
                 const members =
                     snapshot.docs.map(
                         item => ({
-                            id: item.id,
+                            id:
+                                item.id,
+
                             ...item.data()
                         })
                     );
 
 
-                renderMembers(members);
-
+                renderMembers(
+                    members
+                );
             },
+
             error => {
 
                 console.error(
-                    "Members listener error:",
+                    "Members error:",
                     error
                 );
 
@@ -2313,16 +2794,26 @@ function loadRoomMembers(roomId) {
 
 function stopMemberListenerOnly() {
 
-    if (unsubscribeRoomMembers) {
+    if (
+        typeof unsubscribeRoomMembers ===
+        "function"
+    ) {
 
         unsubscribeRoomMembers();
 
-        unsubscribeRoomMembers = null;
+        unsubscribeRoomMembers =
+            null;
     }
 }
 
 
-function renderMembers(members) {
+// ======================================================
+// RENDER MEMBERS
+// ======================================================
+
+function renderMembers(
+    members
+) {
 
     if (!membersList) return;
 
@@ -2346,40 +2837,54 @@ function renderMembers(members) {
 
 
     membersList.innerHTML =
-        members.map(member => `
+        members.map(member => {
 
-            <div class="member-item">
+            const email =
+                member.email ||
+                "Unknown";
 
-                <div class="member-avatar">
-                    ${(member.email || "?")
-                        .charAt(0)
-                        .toUpperCase()}
+            const initial =
+                email
+                    .charAt(0)
+                    .toUpperCase();
+
+
+            return `
+
+                <div class="member-item">
+
+                    <div class="member-avatar">
+                        ${escapeHtml(
+                            initial
+                        )}
+                    </div>
+
+                    <div class="member-info">
+
+                        <strong>
+                            ${escapeHtml(
+                                email
+                            )}
+                        </strong>
+
+                        <span>
+                            ${escapeHtml(
+                                member.role ||
+                                "member"
+                            )}
+                        </span>
+
+                    </div>
+
                 </div>
 
-                <div class="member-info">
-
-                    <strong>
-                        ${escapeHtml(
-                            member.email || "Unknown"
-                        )}
-                    </strong>
-
-                    <span>
-                        ${escapeHtml(
-                            member.role || "member"
-                        )}
-                    </span>
-
-                </div>
-
-            </div>
-
-        `).join("");
+            `;
+        }).join("");
 }
 
 
 // ======================================================
-// SHARED ROOM TASKS
+// SHARED TASKS LISTENER
 // ======================================================
 
 function loadSharedTasks(roomId) {
@@ -2399,34 +2904,42 @@ function loadSharedTasks(roomId) {
         );
 
 
-    const q =
+    const tasksQuery =
         query(
             tasksRef,
-            orderBy("createdAt", "desc")
+            orderBy(
+                "createdAt",
+                "desc"
+            )
         );
 
 
     unsubscribeRoomTasks =
         onSnapshot(
-            q,
+            tasksQuery,
+
             snapshot => {
 
                 const tasks =
                     snapshot.docs.map(
                         item => ({
-                            id: item.id,
+                            id:
+                                item.id,
+
                             ...item.data()
                         })
                     );
 
 
-                renderSharedTasks(tasks);
-
+                renderSharedTasks(
+                    tasks
+                );
             },
+
             error => {
 
                 console.error(
-                    "Shared task listener error:",
+                    "Room tasks error:",
                     error
                 );
 
@@ -2440,11 +2953,15 @@ function loadSharedTasks(roomId) {
 
 function stopSharedTaskListenerOnly() {
 
-    if (unsubscribeRoomTasks) {
+    if (
+        typeof unsubscribeRoomTasks ===
+        "function"
+    ) {
 
         unsubscribeRoomTasks();
 
-        unsubscribeRoomTasks = null;
+        unsubscribeRoomTasks =
+            null;
     }
 }
 
@@ -2453,7 +2970,9 @@ function stopSharedTaskListenerOnly() {
 // RENDER SHARED TASKS
 // ======================================================
 
-function renderSharedTasks(tasks) {
+function renderSharedTasks(
+    tasks
+) {
 
     if (!sharedTasksList) return;
 
@@ -2479,7 +2998,9 @@ function renderSharedTasks(tasks) {
                         ? "completed"
                         : ""
                 }"
-                data-task-id="${task.id}"
+                data-task-id="${escapeHtml(
+                    task.id
+                )}"
             >
 
                 <label class="task-check">
@@ -2487,7 +3008,9 @@ function renderSharedTasks(tasks) {
                     <input
                         type="checkbox"
                         class="shared-task-check"
-                        data-id="${task.id}"
+                        data-id="${escapeHtml(
+                            task.id
+                        )}"
                         ${
                             task.completed
                                 ? "checked"
@@ -2503,16 +3026,20 @@ function renderSharedTasks(tasks) {
                 <div class="task-content">
 
                     <div class="task-text">
-                        ${escapeHtml(task.text)}
+                        ${escapeHtml(
+                            task.text
+                        )}
                     </div>
 
                     <div class="task-date">
 
                         ${escapeHtml(
-                            task.createdByEmail || ""
+                            task.createdByEmail ||
+                            ""
                         )}
 
                         •
+
                         ${formatDate(
                             task.createdAt
                         )}
@@ -2525,7 +3052,9 @@ function renderSharedTasks(tasks) {
                 <button
                     type="button"
                     class="shared-task-delete"
-                    data-id="${task.id}"
+                    data-id="${escapeHtml(
+                        task.id
+                    )}"
                 >
                     ×
                 </button>
@@ -2535,11 +3064,14 @@ function renderSharedTasks(tasks) {
         `).join("");
 
 
+    // Checkbox
     sharedTasksList
-        .querySelectorAll(".shared-task-check")
+        .querySelectorAll(
+            ".shared-task-check"
+        )
         .forEach(input => {
 
-            input?.addEventListener(
+            input.addEventListener(
                 "change",
                 async () => {
 
@@ -2552,11 +3084,14 @@ function renderSharedTasks(tasks) {
         });
 
 
+    // Delete
     sharedTasksList
-        .querySelectorAll(".shared-task-delete")
+        .querySelectorAll(
+            ".shared-task-delete"
+        )
         .forEach(button => {
 
-            button?.addEventListener(
+            button.addEventListener(
                 "click",
                 async () => {
 
@@ -2580,7 +3115,9 @@ sharedTaskForm?.addEventListener(
         event.preventDefault();
 
 
-        if (!requireLogin()) return;
+        if (!requireLogin()) {
+            return;
+        }
 
 
         const roomId =
@@ -2615,10 +3152,16 @@ sharedTaskForm?.addEventListener(
                 ),
                 {
                     text,
-                    completed: false,
-                    createdBy: currentUser.uid,
+
+                    completed:
+                        false,
+
+                    createdBy:
+                        currentUser.uid,
+
                     createdByEmail:
                         currentUser.email,
+
                     createdAt:
                         serverTimestamp()
                 }
@@ -2661,7 +3204,6 @@ async function toggleSharedTask(
     const roomId =
         currentRoomId;
 
-
     if (!roomId) return;
 
 
@@ -2682,7 +3224,10 @@ async function toggleSharedTask(
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Toggle shared task:",
+            error
+        );
 
         showToast(
             "Could not update shared task."
@@ -2691,11 +3236,12 @@ async function toggleSharedTask(
 }
 
 
-async function deleteSharedTask(taskId) {
+async function deleteSharedTask(
+    taskId
+) {
 
     const roomId =
         currentRoomId;
-
 
     if (!roomId) return;
 
@@ -2718,7 +3264,10 @@ async function deleteSharedTask(taskId) {
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Delete shared task:",
+            error
+        );
 
         showToast(
             "Could not delete shared task."
@@ -2735,7 +3284,10 @@ leaveRoomBtn?.addEventListener(
     "click",
     async () => {
 
-        if (!currentRoomId || !currentUser) {
+        if (
+            !currentRoomId ||
+            !currentUser
+        ) {
             return;
         }
 
@@ -2779,7 +3331,7 @@ leaveRoomBtn?.addEventListener(
         } catch (error) {
 
             console.error(
-                "Leave room error:",
+                "Leave room:",
                 error
             );
 
@@ -2799,13 +3351,17 @@ deleteRoomBtn?.addEventListener(
     "click",
     async () => {
 
-        if (!currentRoomId || !currentUser) {
+        if (
+            !currentRoomId ||
+            !currentUser
+        ) {
             return;
         }
 
 
         if (
-            currentRoomRole !== "owner"
+            currentRoomRole !==
+            "owner"
         ) {
 
             showToast(
@@ -2816,13 +3372,24 @@ deleteRoomBtn?.addEventListener(
         }
 
 
+        const confirmed =
+            window.confirm(
+                "Delete this room permanently?"
+            );
+
+
+        if (!confirmed) {
+            return;
+        }
+
+
         const roomId =
             currentRoomId;
 
 
         try {
 
-            // Delete room tasks
+            // Tasks
             const tasksSnapshot =
                 await getDocs(
                     collection(
@@ -2845,7 +3412,7 @@ deleteRoomBtn?.addEventListener(
             }
 
 
-            // Delete room members
+            // Members
             const membersSnapshot =
                 await getDocs(
                     collection(
@@ -2868,23 +3435,19 @@ deleteRoomBtn?.addEventListener(
             }
 
 
-            // Delete user room reference
-            const userRoomRef =
+            // Current owner's reference
+            await deleteDoc(
                 doc(
                     db,
                     "userRooms",
                     currentUser.uid,
                     "rooms",
                     roomId
-                );
-
-
-            await deleteDoc(
-                userRoomRef
+                )
             );
 
 
-            // Delete room itself
+            // Room
             await deleteDoc(
                 doc(
                     db,
@@ -2905,7 +3468,7 @@ deleteRoomBtn?.addEventListener(
         } catch (error) {
 
             console.error(
-                "Delete room error:",
+                "Delete room:",
                 error
             );
 
@@ -2949,24 +3512,21 @@ onAuthStateChanged(
 
         if (user) {
 
-            loadPersonalTasks(user);
+            loadPersonalTasks(
+                user
+            );
 
             loadMyRooms();
 
         } else {
 
-            loadPersonalTasks(null);
+            loadPersonalTasks(
+                null
+            );
 
             stopRoomsListener();
 
-            if (roomsList) {
-
-                roomsList.innerHTML = `
-                    <div class="empty-state">
-                        Login to see your rooms.
-                    </div>
-                `;
-            }
+            renderRooms([]);
         }
 
 
@@ -2983,7 +3543,11 @@ authModal?.addEventListener(
     "click",
     event => {
 
-        if (event.target === authModal) {
+        if (
+            event.target ===
+            authModal
+        ) {
+
             closeAuth();
         }
     }
@@ -2994,7 +3558,11 @@ roomModal?.addEventListener(
     "click",
     event => {
 
-        if (event.target === roomModal) {
+        if (
+            event.target ===
+            roomModal
+        ) {
+
             closeRoom();
         }
     }
@@ -3005,7 +3573,11 @@ joinRoomModal?.addEventListener(
     "click",
     event => {
 
-        if (event.target === joinRoomModal) {
+        if (
+            event.target ===
+            joinRoomModal
+        ) {
+
             closeJoinRoom();
         }
     }
@@ -3013,17 +3585,19 @@ joinRoomModal?.addEventListener(
 
 
 // ======================================================
-// ESCAPE KEY
+// ESCAPE
 // ======================================================
 
 document.addEventListener(
     "keydown",
     event => {
 
-        if (event.key !== "Escape") {
+        if (
+            event.key !==
+            "Escape"
+        ) {
             return;
         }
-
 
         closeAuth();
 
@@ -3035,13 +3609,13 @@ document.addEventListener(
 
 
 // ======================================================
-// START
+// INITIAL START
 // ======================================================
+
+loadTheme();
 
 loadPersonalTasks(null);
 
 updateDashboard();
-
-renderRooms();
 
 showPage("tasks");
