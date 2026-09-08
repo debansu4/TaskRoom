@@ -1445,13 +1445,11 @@ authForm?.addEventListener(
 
         event.preventDefault();
 
-
         const email =
             emailInput?.value.trim();
 
         const password =
             passwordInput?.value;
-
 
         if (!email || !password) {
 
@@ -1463,7 +1461,6 @@ authForm?.addEventListener(
             return;
         }
 
-
         try {
 
             if (authSubmit) {
@@ -1471,54 +1468,90 @@ authForm?.addEventListener(
             }
 
 
-            if (
-                authMode ===
-                "login"
-            ) {
+            // ==================================================
+            // LOGIN
+            // ==================================================
 
-                await signInWithEmailAndPassword(
-                    auth,
-                    email,
-                    password
-                );
-
-                showToast(
-                    "Login successful."
-                );
-
-            } else {
+            if (authMode === "login") {
 
                 const result =
-                    await createUserWithEmailAndPassword(
+                    await signInWithEmailAndPassword(
                         auth,
                         email,
                         password
                     );
 
+                // Refresh user data so emailVerified is current
+                await result.user.reload();
 
-                try {
+                if (!result.user.emailVerified) {
 
-                    await sendEmailVerification(
-                        result.user
-                    );
+                    await signOut(auth);
 
-                } catch (verificationError) {
+                    if (authMessage) {
+                        authMessage.textContent =
+                            "Please verify your email before logging in.";
+                    }
 
-                    console.warn(
-                        verificationError
-                    );
+                    return;
                 }
 
-
                 showToast(
-                    "Account created."
+                    "Login successful."
                 );
+
+                closeAuth();
+
+                authForm.reset();
+
+                return;
             }
 
 
-            closeAuth();
+            // ==================================================
+            // SIGN UP
+            // ==================================================
+
+            const result =
+                await createUserWithEmailAndPassword(
+                    auth,
+                    email,
+                    password
+                );
+
+
+            // Send verification email
+            await sendEmailVerification(
+                result.user
+            );
+
+
+            // IMPORTANT:
+            // Firebase automatically signs the new user in.
+            // Sign out immediately so unverified users
+            // cannot enter TaskRoom.
+
+            await signOut(auth);
+
+
+            if (authMessage) {
+                authMessage.textContent =
+                    "Verification email sent. Please verify your email before logging in.";
+            }
+
+
+            showToast(
+                "Verification email sent."
+            );
+
 
             authForm.reset();
+
+            // Switch back to login mode
+            authMode = "login";
+
+            updateAuthModeUI();
+
 
         } catch (error) {
 
@@ -1579,8 +1612,6 @@ authForm?.addEventListener(
         }
     }
 );
-
-
 // ======================================================
 // ROOM CODE
 // ======================================================
@@ -3501,7 +3532,47 @@ backToRoomsBtn?.addEventListener(
 
 onAuthStateChanged(
     auth,
-    user => {
+    async user => {
+
+        // --------------------------------------------------
+        // BLOCK UNVERIFIED USERS
+        // --------------------------------------------------
+
+        if (user && !user.emailVerified) {
+
+            currentUser = null;
+
+            stopPersonalTaskListener();
+            stopRoomsListener();
+
+            try {
+
+                await signOut(auth);
+
+            } catch (error) {
+
+                console.error(
+                    "Unverified user sign out error:",
+                    error
+                );
+            }
+
+
+            updateAuthButton();
+
+            loadPersonalTasks(null);
+
+            renderRooms([]);
+
+            updateDashboard();
+
+            return;
+        }
+
+
+        // --------------------------------------------------
+        // VERIFIED USER / LOGGED OUT
+        // --------------------------------------------------
 
         currentUser =
             user;
@@ -3533,7 +3604,6 @@ onAuthStateChanged(
         updateDashboard();
     }
 );
-
 
 // ======================================================
 // MODAL OUTSIDE CLICK
