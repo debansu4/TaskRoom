@@ -1,23 +1,31 @@
+// ======================================================
+// TASKROOM - APP.JS
+// ======================================================
+
+// ==============================
+// FIREBASE IMPORTS
+// ==============================
+
 import {
+    onAuthStateChanged,
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signOut,
-    sendEmailVerification,
-    onAuthStateChanged
+    sendEmailVerification
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 
 import {
     collection,
-    addDoc,
-    updateDoc,
-    deleteDoc,
     doc,
+    addDoc,
     setDoc,
     getDoc,
     getDocs,
-    onSnapshot,
+    updateDoc,
+    deleteDoc,
     query,
-    where,
+    orderBy,
+    onSnapshot,
     serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
@@ -28,71 +36,24 @@ import {
 
 
 // ======================================================
-// GLOBAL STATE
-// ======================================================
-
-let currentUser = null;
-
-let personalTasks = [];
-
-let rooms = [];
-
-let currentRoom = null;
-let currentRoomMembers = [];
-let sharedTasks = [];
-
-let unsubscribePersonalTasks = null;
-let unsubscribeOwnedRooms = null;
-let unsubscribeJoinedRooms = null;
-
-let unsubscribeMembers = null;
-let unsubscribeSharedTasks = null;
-
-let authMode = "login";
-let currentTaskFilter = "all";
-
-let ownedRoomsCache = [];
-let joinedRoomsCache = [];
-
-
-// ======================================================
-// DOM
+// DOM ELEMENTS
 // ======================================================
 
 // Navigation
+const navItems = document.querySelectorAll(".nav-item");
 
-const navItems =
-    document.querySelectorAll(".nav-item");
+// Theme / Auth
+const themeToggle = document.getElementById("themeToggle");
+const authButton = document.getElementById("authButton");
 
-const pages = {
-    dashboard:
-        document.getElementById("dashboardPage"),
-
-    tasks:
-        document.getElementById("tasksPage"),
-
-    rooms:
-        document.getElementById("roomsPage"),
-
-    roomView:
-        document.getElementById("roomViewPage"),
-
-    activity:
-        document.getElementById("activityPage")
-};
-
-
-// Header
-
-const themeToggle =
-    document.getElementById("themeToggle");
-
-const authButton =
-    document.getElementById("authButton");
-
+// Pages
+const dashboardPage = document.getElementById("dashboardPage");
+const tasksPage = document.getElementById("tasksPage");
+const roomsPage = document.getElementById("roomsPage");
+const roomViewPage = document.getElementById("roomViewPage");
+const activityPage = document.getElementById("activityPage");
 
 // Dashboard
-
 const dashboardGreeting =
     document.getElementById("dashboardGreeting");
 
@@ -108,11 +69,11 @@ const completedTasks =
 const completionPercent =
     document.getElementById("completionPercent");
 
-const progressBar =
-    document.getElementById("progressBar");
-
 const progressText =
     document.getElementById("progressText");
+
+const progressBar =
+    document.getElementById("progressBar");
 
 const cloudStatus =
     document.getElementById("cloudStatus");
@@ -121,8 +82,21 @@ const recentTasks =
     document.getElementById("recentTasks");
 
 
-// Personal Tasks
+// Quick actions
+const dashboardTasksBtn =
+    document.getElementById("dashboardTasksBtn");
 
+const quickAddTask =
+    document.getElementById("quickAddTask");
+
+const quickCreateRoom =
+    document.getElementById("quickCreateRoom");
+
+const quickJoinRoom =
+    document.getElementById("quickJoinRoom");
+
+
+// Personal Tasks
 const taskForm =
     document.getElementById("taskForm");
 
@@ -137,7 +111,6 @@ const filterButtons =
 
 
 // Rooms
-
 const createRoomBtn =
     document.getElementById("createRoomBtn");
 
@@ -149,12 +122,14 @@ const roomsList =
 
 
 // Room View
-
 const roomViewName =
     document.getElementById("roomViewName");
 
 const roomViewCode =
     document.getElementById("roomViewCode");
+
+const copyRoomViewCode =
+    document.getElementById("copyRoomViewCode");
 
 const roomRoleBadge =
     document.getElementById("roomRoleBadge");
@@ -180,9 +155,11 @@ const leaveRoomBtn =
 const deleteRoomBtn =
     document.getElementById("deleteRoomBtn");
 
+const backToRoomsBtn =
+    document.getElementById("backToRoomsBtn");
+
 
 // Auth Modal
-
 const authModal =
     document.getElementById("authModal");
 
@@ -215,7 +192,6 @@ const authSwitch =
 
 
 // Create Room Modal
-
 const roomModal =
     document.getElementById("roomModal");
 
@@ -239,7 +215,6 @@ const roomMessage =
 
 
 // Join Room Modal
-
 const joinRoomModal =
     document.getElementById("joinRoomModal");
 
@@ -263,450 +238,389 @@ const joinRoomMessage =
 
 
 // Toast
-
 const toast =
     document.getElementById("toast");
 
 
 // ======================================================
-// INITIALIZATION
+// GLOBAL STATE
 // ======================================================
 
-console.log(
-    "TaskRoom initialized successfully."
-);
+let currentUser = null;
+
+let personalTasks = [];
+
+let currentFilter = "all";
+
+let currentRoomId = null;
+
+let currentRoomData = null;
+
+let currentRoomRole = null;
+
+let unsubscribePersonalTasks = null;
+
+let unsubscribeRooms = null;
+
+let unsubscribeRoomMembers = null;
+
+let unsubscribeRoomTasks = null;
+
+let authMode = "login";
 
 
 // ======================================================
 // UTILITY
 // ======================================================
 
-function escapeHTML(value) {
-
-    return String(value ?? "")
-        .replaceAll("&", "&amp;")
-        .replaceAll("<", "&lt;")
-        .replaceAll(">", "&gt;")
-        .replaceAll('"', "&quot;")
-        .replaceAll("'", "&#039;");
-
-}
-
-
 function showToast(message) {
 
-    if (!toast) {
-        return;
-    }
+    if (!toast) return;
 
     toast.textContent = message;
-
     toast.classList.add("show");
 
     setTimeout(() => {
         toast.classList.remove("show");
-    }, 2800);
-
+    }, 2500);
 }
 
 
-function showMessage(
-    element,
-    message,
-    type = "error"
-) {
+function escapeHtml(value) {
 
-    if (!element) {
-        return;
-    }
+    const div = document.createElement("div");
 
-    element.textContent =
-        message;
+    div.textContent = value ?? "";
 
-    element.className =
-        `form-message ${type}`;
-
+    return div.innerHTML;
 }
 
 
-function clearMessage(element) {
+function formatDate(timestamp) {
 
-    if (!element) {
-        return;
+    if (!timestamp) {
+        return "Just now";
     }
 
-    element.textContent = "";
+    let date;
 
-    element.className =
-        "form-message";
+    if (timestamp.toDate) {
+        date = timestamp.toDate();
+    } else {
+        date = new Date(timestamp);
+    }
 
+    return date.toLocaleString();
 }
-
-
-function requireLogin() {
-
-    if (currentUser) {
-        return true;
-    }
-
-    openAuthModal();
-
-    return false;
-
-}
-
-
-// ======================================================
-// ROOM UI RESET
-// ======================================================
-
-function clearRoomUI() {
-
-    if (sharedTaskInput) {
-        sharedTaskInput.value = "";
-    }
-
-    if (roomViewName) {
-        roomViewName.textContent = "";
-    }
-
-    if (roomViewCode) {
-        roomViewCode.textContent = "";
-    }
-
-    if (memberCount) {
-        memberCount.textContent = "0";
-    }
-
-    if (membersList) {
-        membersList.innerHTML = "";
-    }
-
-    if (sharedTasksList) {
-        sharedTasksList.innerHTML = "";
-    }
-
-    if (roomRoleBadge) {
-        roomRoleBadge.textContent = "";
-        roomRoleBadge.className = "";
-    }
-
-}
-
-
-// ======================================================
-// COMPLETE ROOM STATE RESET
-// ======================================================
-
-function resetRoomState() {
-
-    // Stop realtime listeners first
-
-    stopRoomListeners();
-
-    // Clear current room object
-
-    currentRoom = null;
-
-    // Clear room arrays
-
-    currentRoomMembers = [];
-
-    sharedTasks = [];
-
-    // Clear room UI
-
-    clearRoomUI();
-
-}
-
-
-// ======================================================
-// NAVIGATION
-// ======================================================
-
-function showPage(pageName) {
-
-    /*
-     * If user is leaving the Room View,
-     * completely clear room state.
-     */
-
-    if (
-        pageName !== "roomView" &&
-        currentRoom
-    ) {
-
-        resetRoomState();
-
-    }
-
-
-    Object.values(pages).forEach(page => {
-
-        if (page) {
-
-            page.classList.remove(
-                "active-page"
-            );
-
-        }
-
-    });
-
-
-    if (pages[pageName]) {
-
-        pages[pageName].classList.add(
-            "active-page"
-        );
-
-    }
-
-
-    navItems.forEach(item => {
-
-        item.classList.remove("active");
-
-        if (
-            item.dataset.page === pageName ||
-            (
-                pageName === "roomView" &&
-                item.dataset.page === "rooms"
-            )
-        ) {
-
-            item.classList.add("active");
-
-        }
-
-    });
-
-
-    window.scrollTo({
-        top: 0,
-        behavior: "smooth"
-    });
-
-}
-
-
-// Navigation click
-
-navItems.forEach(item => {
-
-    item.addEventListener(
-        "click",
-        () => {
-
-            const page =
-                item.dataset.page;
-
-
-            if (
-                page === "tasks" ||
-                page === "rooms"
-            ) {
-
-                if (!requireLogin()) {
-                    return;
-                }
-
-            }
-
-
-            showPage(page);
-
-        }
-    );
-
-});
-
-
-// ======================================================
-// DASHBOARD BUTTONS
-// ======================================================
-
-document
-    .getElementById("dashboardTasksBtn")
-    ?.addEventListener(
-        "click",
-        () => {
-
-            if (!requireLogin()) {
-                return;
-            }
-
-            showPage("tasks");
-
-        }
-    );
-
-
-document
-    .getElementById("quickAddTask")
-    ?.addEventListener(
-        "click",
-        () => {
-
-            if (!requireLogin()) {
-                return;
-            }
-
-            showPage("tasks");
-
-            setTimeout(() => {
-                taskInput?.focus();
-            }, 200);
-
-        }
-    );
-
-
-document
-    .getElementById("quickCreateRoom")
-    ?.addEventListener(
-        "click",
-        () => {
-
-            if (!requireLogin()) {
-                return;
-            }
-
-            openRoomModal();
-
-        }
-    );
-
-
-document
-    .getElementById("quickJoinRoom")
-    ?.addEventListener(
-        "click",
-        () => {
-
-            if (!requireLogin()) {
-                return;
-            }
-
-            openJoinRoomModal();
-
-        }
-    );
 
 
 // ======================================================
 // THEME
 // ======================================================
 
-const savedTheme =
-    localStorage.getItem(
-        "taskroom-theme"
-    );
+function loadTheme() {
 
+    const savedTheme =
+        localStorage.getItem("taskroom-theme");
 
-if (savedTheme === "dark") {
-
-    document.body.classList.add("dark");
-
+    if (savedTheme === "dark") {
+        document.body.classList.add("dark");
+    } else {
+        document.body.classList.remove("dark");
+    }
 }
 
 
-function updateThemeIcon() {
+themeToggle?.addEventListener("click", () => {
 
-    if (!themeToggle) {
-        return;
-    }
+    document.body.classList.toggle("dark");
 
-    themeToggle.textContent =
+    localStorage.setItem(
+        "taskroom-theme",
         document.body.classList.contains("dark")
-            ? "☀️"
-            : "🌙";
+            ? "dark"
+            : "light"
+    );
+});
 
+
+// ======================================================
+// AUTH HELPERS
+// ======================================================
+
+function requireLogin() {
+
+    if (!currentUser) {
+
+        openAuthModal();
+
+        showToast("Please login first.");
+
+        return false;
+    }
+
+    return true;
 }
 
 
-updateThemeIcon();
+function updateAuthButton() {
 
+    if (!authButton) return;
 
-themeToggle?.addEventListener(
-    "click",
-    () => {
+    if (currentUser) {
 
-        document.body.classList.toggle(
-            "dark"
-        );
+        authButton.textContent = "Logout";
 
-        localStorage.setItem(
-            "taskroom-theme",
-            document.body.classList.contains("dark")
-                ? "dark"
-                : "light"
-        );
+    } else {
 
-        updateThemeIcon();
-
+        authButton.textContent = "Login";
     }
-);
+}
+
+
+authButton?.addEventListener("click", async () => {
+
+    if (currentUser) {
+
+        try {
+
+            await signOut(auth);
+
+            showToast("Logged out successfully.");
+
+        } catch (error) {
+
+            console.error(error);
+
+            showToast("Logout failed.");
+        }
+
+    } else {
+
+        openAuthModal();
+    }
+});
 
 
 // ======================================================
-// LOCAL STORAGE TASKS
+// PAGE NAVIGATION
 // ======================================================
+
+function showPage(pageName) {
+
+    const pages = {
+        dashboard: dashboardPage,
+        tasks: tasksPage,
+        rooms: roomsPage,
+        activity: activityPage,
+        roomView: roomViewPage
+    };
+
+    Object.values(pages).forEach(page => {
+
+        if (page) {
+            page.classList.remove("active");
+        }
+    });
+
+
+    const selectedPage = pages[pageName];
+
+    if (selectedPage) {
+        selectedPage.classList.add("active");
+    }
+
+
+    navItems.forEach(item => {
+
+        if (!item) return;
+
+        item.classList.toggle(
+            "active",
+            item.dataset.page === pageName
+        );
+    });
+
+
+    if (pageName !== "roomView") {
+
+        resetRoomState();
+    }
+}
+
+
+// Navigation
+navItems.forEach(item => {
+
+    if (!item) return;
+
+    item.addEventListener("click", () => {
+
+        const page =
+            item.dataset.page;
+
+        if (
+            page === "tasks" ||
+            page === "rooms" ||
+            page === "activity"
+        ) {
+
+            if (!requireLogin()) {
+                return;
+            }
+        }
+
+        showPage(page);
+    });
+});
+
+
+// Dashboard buttons
+dashboardTasksBtn?.addEventListener("click", () => {
+
+    if (!requireLogin()) return;
+
+    showPage("tasks");
+});
+
+
+quickAddTask?.addEventListener("click", () => {
+
+    if (!requireLogin()) return;
+
+    showPage("tasks");
+
+    setTimeout(() => {
+        taskInput?.focus();
+    }, 100);
+});
+
+
+quickCreateRoom?.addEventListener("click", () => {
+
+    if (!requireLogin()) return;
+
+    openRoomModal();
+});
+
+
+quickJoinRoom?.addEventListener("click", () => {
+
+    if (!requireLogin()) return;
+
+    openJoinRoomModal();
+});
+
+
+// ======================================================
+// GUEST TASKS
+// ======================================================
+
+const GUEST_TASK_KEY =
+    "taskroom-guest-tasks";
+
 
 function getGuestTasks() {
 
     try {
 
         return JSON.parse(
-            localStorage.getItem(
-                "taskroom-guest-tasks"
-            )
+            localStorage.getItem(GUEST_TASK_KEY)
         ) || [];
 
     } catch {
 
         return [];
-
     }
-
 }
 
 
-function saveGuestTasks() {
+function saveGuestTasks(tasks) {
 
     localStorage.setItem(
-        "taskroom-guest-tasks",
-        JSON.stringify(
-            personalTasks
-        )
+        GUEST_TASK_KEY,
+        JSON.stringify(tasks)
     );
-
 }
 
 
 // ======================================================
-// PERSONAL TASK COLLECTION
+// PERSONAL TASKS
 // ======================================================
 
-function getPersonalTasksCollection() {
+async function addPersonalTask(text) {
+
+    if (!text.trim()) return;
+
 
     if (!currentUser) {
-        return null;
+
+        const tasks =
+            getGuestTasks();
+
+        tasks.unshift({
+            id: Date.now().toString(),
+            text: text.trim(),
+            completed: false,
+            createdAt: Date.now()
+        });
+
+        saveGuestTasks(tasks);
+
+        loadPersonalTasks(null);
+
+        showToast("Task added.");
+
+        return;
     }
 
-    return collection(
-        db,
-        "users",
-        currentUser.uid,
-        "tasks"
-    );
 
+    try {
+
+        await addDoc(
+            collection(
+                db,
+                "users",
+                currentUser.uid,
+                "tasks"
+            ),
+            {
+                text: text.trim(),
+                completed: false,
+                createdAt: serverTimestamp()
+            }
+        );
+
+        showToast("Task added.");
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast("Could not add task.");
+    }
 }
 
 
+taskForm?.addEventListener("submit", async event => {
+
+    event.preventDefault();
+
+    const text =
+        taskInput?.value.trim();
+
+    if (!text) return;
+
+    await addPersonalTask(text);
+
+    if (taskInput) {
+        taskInput.value = "";
+    }
+});
+
+
 // ======================================================
-// PERSONAL TASK LISTENER
+// LOAD PERSONAL TASKS
 // ======================================================
 
 function stopPersonalTaskListener() {
@@ -716,9 +630,7 @@ function stopPersonalTaskListener() {
         unsubscribePersonalTasks();
 
         unsubscribePersonalTasks = null;
-
     }
-
 }
 
 
@@ -732,292 +644,58 @@ function loadPersonalTasks(user) {
         personalTasks =
             getGuestTasks();
 
-        renderAllTasks();
+        renderPersonalTasks();
 
         updateDashboard();
 
         return;
-
     }
 
 
     const tasksRef =
-        getPersonalTasksCollection();
+        collection(
+            db,
+            "users",
+            user.uid,
+            "tasks"
+        );
+
+
+    const q =
+        query(
+            tasksRef,
+            orderBy("createdAt", "desc")
+        );
 
 
     unsubscribePersonalTasks =
         onSnapshot(
-            tasksRef,
-
+            q,
             snapshot => {
 
                 personalTasks =
-                    snapshot.docs.map(
-                        taskDoc => {
+                    snapshot.docs.map(item => ({
+                        id: item.id,
+                        ...item.data()
+                    }));
 
-                            const data =
-                                taskDoc.data();
-
-                            return {
-
-                                id:
-                                    taskDoc.id,
-
-                                text:
-                                    data.text || "",
-
-                                completed:
-                                    data.completed === true,
-
-                                createdAt:
-                                    data.createdAt || null
-
-                            };
-
-                        }
-                    );
-
-
-                personalTasks.sort(
-                    (a, b) => {
-
-                        const aTime =
-                            a.createdAt
-                                ?.toMillis?.() || 0;
-
-                        const bTime =
-                            b.createdAt
-                                ?.toMillis?.() || 0;
-
-                        return bTime - aTime;
-
-                    }
-                );
-
-
-                renderAllTasks();
+                renderPersonalTasks();
 
                 updateDashboard();
 
             },
-
             error => {
 
                 console.error(
-                    "Personal task error:",
+                    "Personal task listener error:",
                     error
                 );
 
-                personalTasks = [];
-
-                renderAllTasks();
-
-                updateDashboard();
-
-            }
-        );
-
-}
-
-
-// ======================================================
-// ADD PERSONAL TASK
-// ======================================================
-
-taskForm?.addEventListener(
-    "submit",
-    async event => {
-
-        event.preventDefault();
-
-        const text =
-            taskInput.value.trim();
-
-        if (!text) {
-            return;
-        }
-
-
-        try {
-
-            if (!currentUser) {
-
-                const task = {
-
-                    id:
-                        crypto.randomUUID(),
-
-                    text,
-
-                    completed: false,
-
-                    createdAt:
-                        Date.now()
-
-                };
-
-
-                personalTasks.unshift(task);
-
-                saveGuestTasks();
-
-                taskInput.value = "";
-
-                renderAllTasks();
-
-                updateDashboard();
-
                 showToast(
-                    "Task added."
+                    "Could not load your tasks."
                 );
-
-                return;
-
-            }
-
-
-            await addDoc(
-                getPersonalTasksCollection(),
-                {
-
-                    text,
-
-                    completed: false,
-
-                    createdAt:
-                        serverTimestamp()
-
-                }
-            );
-
-
-            taskInput.value = "";
-
-            showToast(
-                "Task added."
-            );
-
-        } catch (error) {
-
-            console.error(
-                "Add task error:",
-                error
-            );
-
-            showToast(
-                "Could not add task."
-            );
-
-        }
-
-    }
-);
-
-
-// ======================================================
-// TOGGLE PERSONAL TASK
-// ======================================================
-
-async function togglePersonalTask(task) {
-
-    try {
-
-        if (!currentUser) {
-
-            task.completed =
-                !task.completed;
-
-            saveGuestTasks();
-
-            renderAllTasks();
-
-            updateDashboard();
-
-            return;
-
-        }
-
-
-        await updateDoc(
-            doc(
-                db,
-                "users",
-                currentUser.uid,
-                "tasks",
-                task.id
-            ),
-            {
-                completed:
-                    !task.completed
             }
         );
-
-    } catch (error) {
-
-        console.error(
-            "Toggle task error:",
-            error
-        );
-
-        showToast(
-            "Could not update task."
-        );
-
-    }
-
-}
-
-
-// ======================================================
-// DELETE PERSONAL TASK
-// ======================================================
-
-async function deletePersonalTask(task) {
-
-    try {
-
-        if (!currentUser) {
-
-            personalTasks =
-                personalTasks.filter(
-                    item =>
-                        item.id !== task.id
-                );
-
-            saveGuestTasks();
-
-            renderAllTasks();
-
-            updateDashboard();
-
-            return;
-
-        }
-
-
-        await deleteDoc(
-            doc(
-                db,
-                "users",
-                currentUser.uid,
-                "tasks",
-                task.id
-            )
-        );
-
-    } catch (error) {
-
-        console.error(
-            "Delete task error:",
-            error
-        );
-
-        showToast(
-            "Could not delete task."
-        );
-
-    }
-
 }
 
 
@@ -1027,42 +705,29 @@ async function deletePersonalTask(task) {
 
 function getFilteredTasks() {
 
-    if (
-        currentTaskFilter ===
-        "active"
-    ) {
+    if (currentFilter === "active") {
 
         return personalTasks.filter(
-            task =>
-                !task.completed
+            task => !task.completed
         );
-
     }
 
 
-    if (
-        currentTaskFilter ===
-        "completed"
-    ) {
+    if (currentFilter === "completed") {
 
         return personalTasks.filter(
-            task =>
-                task.completed
+            task => task.completed
         );
-
     }
 
 
     return personalTasks;
-
 }
 
 
-function renderAllTasks() {
+function renderPersonalTasks() {
 
-    if (!tasksList) {
-        return;
-    }
+    if (!tasksList) return;
 
 
     const tasks =
@@ -1073,149 +738,233 @@ function renderAllTasks() {
 
         tasksList.innerHTML = `
             <div class="empty-state">
-
-                <div class="empty-icon">
-                    ✓
-                </div>
-
-                <h3>
-                    No tasks here
-                </h3>
-
-                <p>
-                    Add a task and start making progress.
-                </p>
-
+                No tasks found.
             </div>
         `;
 
         return;
-
     }
 
 
     tasksList.innerHTML =
-        tasks.map(task => {
+        tasks.map(task => `
 
-            return `
-                <div
-                    class="task-item ${
-                        task.completed
-                            ? "completed"
-                            : ""
-                    }"
-                >
+            <div
+                class="task-item ${task.completed ? "completed" : ""}"
+                data-task-id="${task.id}"
+            >
 
-                    <button
-                        class="task-check"
-                        data-action="toggle-task"
-                        data-id="${escapeHTML(task.id)}"
-                        aria-label="Toggle task"
+                <label class="task-check">
+
+                    <input
+                        type="checkbox"
+                        class="personal-task-check"
+                        data-id="${task.id}"
+                        ${task.completed ? "checked" : ""}
                     >
-                        ${
-                            task.completed
-                                ? "✓"
-                                : ""
-                        }
-                    </button>
 
-                    <span class="task-text">
-                        ${escapeHTML(task.text)}
-                    </span>
+                    <span></span>
 
-                    <button
-                        class="task-delete"
-                        data-action="delete-task"
-                        data-id="${escapeHTML(task.id)}"
-                        aria-label="Delete task"
-                    >
-                        ×
-                    </button>
+                </label>
+
+                <div class="task-content">
+
+                    <div class="task-text">
+                        ${escapeHtml(task.text)}
+                    </div>
+
+                    <div class="task-date">
+                        ${formatDate(task.createdAt)}
+                    </div>
 
                 </div>
-            `;
 
-        }).join("");
+                <button
+                    class="task-delete"
+                    data-id="${task.id}"
+                    type="button"
+                >
+                    ×
+                </button>
 
+            </div>
+
+        `).join("");
+
+
+    tasksList
+        .querySelectorAll(".personal-task-check")
+        .forEach(input => {
+
+            input?.addEventListener(
+                "change",
+                async () => {
+
+                    await togglePersonalTask(
+                        input.dataset.id,
+                        input.checked
+                    );
+                }
+            );
+        });
+
+
+    tasksList
+        .querySelectorAll(".task-delete")
+        .forEach(button => {
+
+            button?.addEventListener(
+                "click",
+                async () => {
+
+                    await deletePersonalTask(
+                        button.dataset.id
+                    );
+                }
+            );
+        });
 }
 
 
-// Personal task event delegation
+// ======================================================
+// PERSONAL TASK ACTIONS
+// ======================================================
 
-tasksList?.addEventListener(
-    "click",
-    event => {
+async function togglePersonalTask(
+    taskId,
+    completed
+) {
 
-        const button =
-            event.target.closest("button");
+    if (!currentUser) {
 
-        if (!button) {
-            return;
-        }
-
-
-        const id =
-            button.dataset.id;
-
+        const tasks =
+            getGuestTasks();
 
         const task =
-            personalTasks.find(
-                item =>
-                    item.id === id
+            tasks.find(
+                item => item.id === taskId
             );
 
+        if (task) {
 
-        if (!task) {
-            return;
+            task.completed =
+                completed;
+
+            saveGuestTasks(tasks);
+
+            personalTasks = tasks;
+
+            renderPersonalTasks();
+
+            updateDashboard();
         }
 
-
-        if (
-            button.dataset.action ===
-            "toggle-task"
-        ) {
-
-            togglePersonalTask(task);
-
-        }
-
-
-        if (
-            button.dataset.action ===
-            "delete-task"
-        ) {
-
-            deletePersonalTask(task);
-
-        }
-
+        return;
     }
-);
 
 
-// Filters
+    try {
+
+        await updateDoc(
+            doc(
+                db,
+                "users",
+                currentUser.uid,
+                "tasks",
+                taskId
+            ),
+            {
+                completed
+            }
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            "Could not update task."
+        );
+    }
+}
+
+
+async function deletePersonalTask(taskId) {
+
+    if (!currentUser) {
+
+        const tasks =
+            getGuestTasks();
+
+        const filtered =
+            tasks.filter(
+                task => task.id !== taskId
+            );
+
+        saveGuestTasks(filtered);
+
+        personalTasks = filtered;
+
+        renderPersonalTasks();
+
+        updateDashboard();
+
+        showToast("Task deleted.");
+
+        return;
+    }
+
+
+    try {
+
+        await deleteDoc(
+            doc(
+                db,
+                "users",
+                currentUser.uid,
+                "tasks",
+                taskId
+            )
+        );
+
+        showToast("Task deleted.");
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            "Could not delete task."
+        );
+    }
+}
+
+
+// ======================================================
+// FILTERS
+// ======================================================
 
 filterButtons.forEach(button => {
 
-    button.addEventListener(
-        "click",
-        () => {
+    if (!button) return;
 
-            filterButtons.forEach(
-                item =>
-                    item.classList.remove("active")
-            );
+    button.addEventListener("click", () => {
 
-            button.classList.add("active");
+        filterButtons.forEach(item => {
 
-            currentTaskFilter =
-                button.dataset.filter;
+            if (item) {
+                item.classList.remove("active");
+            }
+        });
 
-            renderAllTasks();
 
-        }
-    );
+        button.classList.add("active");
 
+        currentFilter =
+            button.dataset.filter || "all";
+
+        renderPersonalTasks();
+    });
 });
 
 
@@ -1228,17 +977,13 @@ function updateDashboard() {
     const total =
         personalTasks.length;
 
-
     const completed =
         personalTasks.filter(
-            task =>
-                task.completed
+            task => task.completed
         ).length;
-
 
     const active =
         total - completed;
-
 
     const percent =
         total === 0
@@ -1252,28 +997,23 @@ function updateDashboard() {
         totalTasks.textContent = total;
     }
 
-
     if (activeTasks) {
         activeTasks.textContent = active;
     }
 
-
     if (completedTasks) {
         completedTasks.textContent = completed;
     }
-
 
     if (completionPercent) {
         completionPercent.textContent =
             `${percent}%`;
     }
 
-
     if (progressText) {
         progressText.textContent =
-            `${percent}%`;
+            `${completed} of ${total} completed`;
     }
-
 
     if (progressBar) {
         progressBar.style.width =
@@ -1281,47 +1021,81 @@ function updateDashboard() {
     }
 
 
-    if (recentTasks) {
+    if (dashboardGreeting) {
 
-        const recent =
-            personalTasks.slice(0, 5);
+        if (currentUser) {
 
+            const email =
+                currentUser.email || "";
 
-        if (!recent.length) {
-
-            recentTasks.innerHTML = `
-                <div class="empty-inline">
-                    No tasks yet.
-                </div>
-            `;
-
+            dashboardGreeting.textContent =
+                `Welcome back, ${email}`;
         } else {
 
-            recentTasks.innerHTML =
-                recent.map(task => {
-
-                    return `
-                        <div class="recent-task">
-
-                            <span class="${
-                                task.completed
-                                    ? "done-dot"
-                                    : "todo-dot"
-                            }"></span>
-
-                            <span>
-                                ${escapeHTML(task.text)}
-                            </span>
-
-                        </div>
-                    `;
-
-                }).join("");
-
+            dashboardGreeting.textContent =
+                "Welcome to TaskRoom";
         }
-
     }
 
+
+    if (cloudStatus) {
+
+        cloudStatus.textContent =
+            currentUser
+                ? "Cloud Sync Active"
+                : "Guest Mode";
+    }
+
+
+    renderRecentTasks();
+}
+
+
+function renderRecentTasks() {
+
+    if (!recentTasks) return;
+
+
+    const recent =
+        personalTasks.slice(0, 5);
+
+
+    if (!recent.length) {
+
+        recentTasks.innerHTML = `
+            <div class="empty-state">
+                No recent tasks.
+            </div>
+        `;
+
+        return;
+    }
+
+
+    recentTasks.innerHTML =
+        recent.map(task => `
+
+            <div class="recent-task ${
+                task.completed
+                    ? "completed"
+                    : ""
+            }">
+
+                <span>
+                    ${escapeHtml(task.text)}
+                </span>
+
+                <span>
+                    ${
+                        task.completed
+                            ? "✓"
+                            : "Active"
+                    }
+                </span>
+
+            </div>
+
+        `).join("");
 }
 
 
@@ -1329,101 +1103,78 @@ function updateDashboard() {
 // AUTH MODAL
 // ======================================================
 
-function openAuthModal(
-    mode = authMode
-) {
+function openAuthModal() {
 
-    authMode = mode;
+    if (!authModal) return;
 
-    clearMessage(authMessage);
+    authModal.classList.add("active");
 
-    authModal.classList.remove("hidden");
+    authMessage &&
+        (authMessage.textContent = "");
 
-    updateAuthModal();
-
+    emailInput?.focus();
 }
 
 
-function closeAuthModalFunction() {
+function closeAuth() {
 
-    authModal.classList.add("hidden");
-
-    clearMessage(authMessage);
-
-    authForm.reset();
-
+    authModal?.classList.remove("active");
 }
-
-
-function updateAuthModal() {
-
-    if (authMode === "login") {
-
-        authTitle.textContent =
-            "Login";
-
-        authSubtitle.textContent =
-            "Login to sync your tasks across devices.";
-
-        authSubmit.textContent =
-            "Login";
-
-        authSwitch.textContent =
-            "Don't have an account? Sign up";
-
-        passwordInput.autocomplete =
-            "current-password";
-
-    } else {
-
-        authTitle.textContent =
-            "Create Account";
-
-        authSubtitle.textContent =
-            "Create your TaskRoom account.";
-
-        authSubmit.textContent =
-            "Sign Up";
-
-        authSwitch.textContent =
-            "Already have an account? Login";
-
-        passwordInput.autocomplete =
-            "new-password";
-
-    }
-
-}
-
-
-authButton?.addEventListener(
-    "click",
-    async () => {
-
-        if (currentUser) {
-
-            resetRoomState();
-
-            await signOut(auth);
-
-            showToast(
-                "Logged out successfully."
-            );
-
-            return;
-
-        }
-
-        openAuthModal("login");
-
-    }
-);
 
 
 closeAuthModal?.addEventListener(
     "click",
-    closeAuthModalFunction
+    closeAuth
 );
+
+
+function updateAuthModeUI() {
+
+    if (authMode === "login") {
+
+        if (authTitle) {
+            authTitle.textContent =
+                "Welcome Back";
+        }
+
+        if (authSubtitle) {
+            authSubtitle.textContent =
+                "Login to continue to TaskRoom";
+        }
+
+        if (authSubmit) {
+            authSubmit.textContent =
+                "Login";
+        }
+
+        if (authSwitch) {
+            authSwitch.textContent =
+                "Create an account";
+        }
+
+    } else {
+
+        if (authTitle) {
+            authTitle.textContent =
+                "Create Account";
+        }
+
+        if (authSubtitle) {
+            authSubtitle.textContent =
+                "Create your TaskRoom account";
+        }
+
+        if (authSubmit) {
+            authSubmit.textContent =
+                "Sign Up";
+        }
+
+        if (authSwitch) {
+            authSwitch.textContent =
+                "Already have an account?";
+        }
+    }
+}
 
 
 authSwitch?.addEventListener(
@@ -1435,17 +1186,14 @@ authSwitch?.addEventListener(
                 ? "signup"
                 : "login";
 
-        updateAuthModal();
+        updateAuthModeUI();
 
-        clearMessage(authMessage);
-
+        if (authMessage) {
+            authMessage.textContent = "";
+        }
     }
 );
 
-
-// ======================================================
-// AUTH SUBMIT
-// ======================================================
 
 authForm?.addEventListener(
     "submit",
@@ -1455,37 +1203,40 @@ authForm?.addEventListener(
 
 
         const email =
-            emailInput.value.trim();
-
+            emailInput?.value.trim();
 
         const password =
-            passwordInput.value;
+            passwordInput?.value;
 
 
         if (!email || !password) {
+
+            if (authMessage) {
+                authMessage.textContent =
+                    "Enter email and password.";
+            }
+
             return;
         }
 
 
-        authSubmit.disabled = true;
-
-
-        authSubmit.textContent =
-            authMode === "login"
-                ? "Logging in..."
-                : "Creating...";
-
-
-        clearMessage(authMessage);
-
-
         try {
 
-            if (
-                authMode === "signup"
-            ) {
+            if (authMode === "login") {
 
-                const credential =
+                await signInWithEmailAndPassword(
+                    auth,
+                    email,
+                    password
+                );
+
+                showToast(
+                    "Login successful."
+                );
+
+            } else {
+
+                const result =
                     await createUserWithEmailAndPassword(
                         auth,
                         email,
@@ -1493,90 +1244,57 @@ authForm?.addEventListener(
                     );
 
 
-                await sendEmailVerification(
-                    credential.user
+                try {
+
+                    await sendEmailVerification(
+                        result.user
+                    );
+
+                } catch (verificationError) {
+
+                    console.warn(
+                        "Verification email failed:",
+                        verificationError
+                    );
+                }
+
+
+                showToast(
+                    "Account created."
                 );
+            }
 
 
-                await signOut(auth);
+            closeAuth();
 
 
-                showMessage(
-                    authMessage,
-                    "Account created. Please verify your email before logging in.",
-                    "success"
-                );
-
-
+            if (authForm) {
                 authForm.reset();
-
-                authMode = "login";
-
-                updateAuthModal();
-
-                return;
-
             }
-
-
-            const credential =
-                await signInWithEmailAndPassword(
-                    auth,
-                    email,
-                    password
-                );
-
-
-            if (
-                !credential.user.emailVerified
-            ) {
-
-                await signOut(auth);
-
-                showMessage(
-                    authMessage,
-                    "Please verify your email first. Check your inbox.",
-                    "error"
-                );
-
-                return;
-
-            }
-
-
-            closeAuthModalFunction();
-
-            showToast(
-                "Welcome back."
-            );
 
         } catch (error) {
 
-            console.error(
-                "Authentication error:",
-                error
-            );
-
+            console.error(error);
 
             let message =
-                "Authentication failed. Please try again.";
+                "Authentication failed.";
 
 
             if (
-                error.code ===
-                "auth/email-already-in-use"
-            ) {
-
-                message =
-                    "This email is already registered.";
-
-            } else if (
                 error.code ===
                 "auth/invalid-credential"
             ) {
 
                 message =
-                    "Incorrect email or password.";
+                    "Invalid email or password.";
+
+            } else if (
+                error.code ===
+                "auth/email-already-in-use"
+            ) {
+
+                message =
+                    "Email already in use.";
 
             } else if (
                 error.code ===
@@ -1584,7 +1302,7 @@ authForm?.addEventListener(
             ) {
 
                 message =
-                    "Password must be at least 6 characters.";
+                    "Password is too weak.";
 
             } else if (
                 error.code ===
@@ -1592,146 +1310,21 @@ authForm?.addEventListener(
             ) {
 
                 message =
-                    "Please enter a valid email.";
-
+                    "Invalid email address.";
             }
 
 
-            showMessage(
-                authMessage,
-                message
-            );
-
-        } finally {
-
-            authSubmit.disabled = false;
-
-            updateAuthModal();
-
+            if (authMessage) {
+                authMessage.textContent =
+                    message;
+            }
         }
-
     }
 );
 
 
 // ======================================================
-// AUTH STATE
-// ======================================================
-
-onAuthStateChanged(
-    auth,
-    user => {
-
-        /*
-         * When account changes,
-         * absolutely clear previous room.
-         */
-
-        resetRoomState();
-
-
-        currentUser = user;
-
-
-        if (user) {
-
-            authButton.textContent =
-                "Logout";
-
-
-            const name =
-                user.email
-                    ? user.email.split("@")[0]
-                    : "there";
-
-
-            if (dashboardGreeting) {
-
-                dashboardGreeting.textContent =
-                    `Welcome back, ${name}`;
-
-            }
-
-
-            if (cloudStatus) {
-
-                cloudStatus.className =
-                    "cloud-status connected";
-
-                cloudStatus.innerHTML = `
-                    <span class="status-dot"></span>
-                    Cloud synced
-                `;
-
-            }
-
-
-            loadPersonalTasks(user);
-
-            loadUserRooms(user);
-
-        } else {
-
-            authButton.textContent =
-                "Login";
-
-
-            if (dashboardGreeting) {
-
-                dashboardGreeting.textContent =
-                    "Welcome to TaskRoom";
-
-            }
-
-
-            if (cloudStatus) {
-
-                cloudStatus.className =
-                    "cloud-status guest";
-
-                cloudStatus.innerHTML = `
-                    <span class="status-dot"></span>
-                    Guest mode
-                `;
-
-            }
-
-
-            loadPersonalTasks(null);
-
-            stopRoomsListeners();
-
-            rooms = [];
-
-            ownedRoomsCache = [];
-
-            joinedRoomsCache = [];
-
-        }
-
-
-        renderRooms();
-
-    }
-);
-
-
-// ======================================================
-// ROOM UTILITIES
-// ======================================================
-
-function getRoomsCollection() {
-
-    return collection(
-        db,
-        "rooms"
-    );
-
-}
-
-
-// ======================================================
-// ROOM CODE GENERATOR
+// ROOM CODE
 // ======================================================
 
 function generateRoomCode() {
@@ -1751,38 +1344,22 @@ function generateRoomCode() {
                     chars.length
                 )
             ];
-
     }
 
 
     return code;
-
 }
 
 
-// ======================================================
-// UNIQUE ROOM ID
-// ======================================================
-
 async function generateUniqueRoomId() {
 
-    for (
-        let attempt = 0;
-        attempt < 5;
-        attempt++
-    ) {
+    for (let attempt = 0; attempt < 5; attempt++) {
 
         const roomId =
             generateRoomCode();
 
-
         const roomRef =
-            doc(
-                db,
-                "rooms",
-                roomId
-            );
-
+            doc(db, "rooms", roomId);
 
         const existingRoom =
             await getDoc(roomRef);
@@ -1791,34 +1368,24 @@ async function generateUniqueRoomId() {
         if (!existingRoom.exists()) {
 
             return roomId;
-
         }
-
     }
 
 
     throw new Error(
         "Could not generate a unique room ID."
     );
-
 }
 
 
 // ======================================================
-// SHA-256 PASSWORD HASH
+// SHA-256 ROOM PASSWORD
 // ======================================================
 
-async function hashRoomPassword(
-    password
-) {
-
-    const encoder =
-        new TextEncoder();
-
+async function hashRoomPassword(password) {
 
     const data =
-        encoder.encode(password);
-
+        new TextEncoder().encode(password);
 
     const hashBuffer =
         await crypto.subtle.digest(
@@ -1826,120 +1393,59 @@ async function hashRoomPassword(
             data
         );
 
-
     const hashArray =
         Array.from(
-            new Uint8Array(
-                hashBuffer
-            )
+            new Uint8Array(hashBuffer)
         );
 
 
     return hashArray
-        .map(
-            byte =>
-                byte
-                    .toString(16)
-                    .padStart(2, "0")
+        .map(byte =>
+            byte
+                .toString(16)
+                .padStart(2, "0")
         )
         .join("");
-
 }
 
 
 // ======================================================
-// ROOM MODALS
+// ROOM MODAL
 // ======================================================
 
 function openRoomModal() {
 
-    if (!requireLogin()) {
-        return;
-    }
+    if (!roomModal) return;
 
+    roomModal.classList.add("active");
 
-    clearMessage(roomMessage);
+    roomMessage &&
+        (roomMessage.textContent = "");
 
-    roomForm.reset();
-
-    roomModal.classList.remove("hidden");
-
-
-    setTimeout(() => {
-
-        roomNameInput?.focus();
-
-    }, 100);
-
+    roomNameInput?.focus();
 }
 
 
-function closeRoomModalFunction() {
+function closeRoom() {
 
-    roomModal.classList.add("hidden");
-
-    clearMessage(roomMessage);
-
-    roomForm.reset();
-
+    roomModal?.classList.remove("active");
 }
 
 
 createRoomBtn?.addEventListener(
     "click",
-    openRoomModal
+    () => {
+
+        if (!requireLogin()) return;
+
+        openRoomModal();
+    }
 );
 
 
 closeRoomModal?.addEventListener(
     "click",
-    closeRoomModalFunction
-);
-
-
-function openJoinRoomModal() {
-
-    if (!requireLogin()) {
-        return;
-    }
-
-
-    clearMessage(joinRoomMessage);
-
-    joinRoomForm.reset();
-
-    joinRoomModal.classList.remove("hidden");
-
-
-    setTimeout(() => {
-
-        joinRoomCodeInput?.focus();
-
-    }, 100);
-
-}
-
-
-function closeJoinRoomModalFunction() {
-
-    joinRoomModal.classList.add("hidden");
-
-    clearMessage(joinRoomMessage);
-
-    joinRoomForm.reset();
-
-}
-
-
-joinRoomBtn?.addEventListener(
-    "click",
-    openJoinRoomModal
-);
-
-
-closeJoinRoomModal?.addEventListener(
-    "click",
-    closeJoinRoomModalFunction
+    closeRoom
 );
 
 
@@ -1954,64 +1460,33 @@ roomForm?.addEventListener(
         event.preventDefault();
 
 
-        if (!currentUser) {
-
-            showMessage(
-                roomMessage,
-                "Please login first."
-            );
-
-            return;
-
-        }
+        if (!requireLogin()) return;
 
 
         const roomName =
-            roomNameInput.value.trim();
-
+            roomNameInput?.value.trim();
 
         const roomPassword =
-            roomPasswordInput.value;
+            roomPasswordInput?.value;
 
 
-        if (!roomName) {
+        if (!roomName || !roomPassword) {
 
-            showMessage(
-                roomMessage,
-                "Please enter a room name."
-            );
-
-            return;
-
-        }
-
-
-        if (
-            roomPassword.length < 6
-        ) {
-
-            showMessage(
-                roomMessage,
-                "Room password must be at least 6 characters."
-            );
+            if (roomMessage) {
+                roomMessage.textContent =
+                    "Enter room name and password.";
+            }
 
             return;
-
         }
-
-
-        createRoomSubmit.disabled =
-            true;
-
-
-        createRoomSubmit.textContent =
-            "Creating...";
-
-
-        clearMessage(roomMessage);
 
 
         try {
+
+            if (createRoomSubmit) {
+                createRoomSubmit.disabled = true;
+            }
+
 
             const roomId =
                 await generateUniqueRoomId();
@@ -2031,32 +1506,17 @@ roomForm?.addEventListener(
                 );
 
 
-            // Create room
-
             await setDoc(
                 roomRef,
                 {
-
-                    name:
-                        roomName,
-
-                    ownerId:
-                        currentUser.uid,
-
-                    ownerEmail:
-                        currentUser.email,
-
-                    passwordHash:
-                        passwordHash,
-
-                    createdAt:
-                        serverTimestamp()
-
+                    name: roomName,
+                    ownerId: currentUser.uid,
+                    ownerEmail: currentUser.email,
+                    passwordHash,
+                    createdAt: serverTimestamp()
                 }
             );
 
-
-            // Add owner member
 
             const memberRef =
                 doc(
@@ -2071,24 +1531,13 @@ roomForm?.addEventListener(
             await setDoc(
                 memberRef,
                 {
-
-                    uid:
-                        currentUser.uid,
-
-                    email:
-                        currentUser.email,
-
-                    role:
-                        "owner",
-
-                    joinedAt:
-                        serverTimestamp()
-
+                    uid: currentUser.uid,
+                    email: currentUser.email,
+                    role: "owner",
+                    joinedAt: serverTimestamp()
                 }
             );
 
-
-            // User room index
 
             const userRoomRef =
                 doc(
@@ -2103,59 +1552,27 @@ roomForm?.addEventListener(
             await setDoc(
                 userRoomRef,
                 {
-
-                    roomId:
-                        roomId,
-
-                    roomName:
-                        roomName,
-
-                    role:
-                        "owner",
-
-                    joinedAt:
-                        serverTimestamp()
-
+                    roomId,
+                    roomName,
+                    role: "owner",
+                    joinedAt: serverTimestamp()
                 }
             );
 
 
-            closeRoomModalFunction();
+            if (roomForm) {
+                roomForm.reset();
+            }
 
+
+            closeRoom();
 
             showToast(
-                `Room created. Code: ${roomId}`
+                `Room created: ${roomId}`
             );
 
 
-            /*
-             * Clear every previous room state
-             * before entering the new room.
-             */
-
-            resetRoomState();
-
-
-            setTimeout(() => {
-
-                openRoom({
-
-                    id:
-                        roomId,
-
-                    name:
-                        roomName,
-
-                    roomCode:
-                        roomId,
-
-                    ownerId:
-                        currentUser.uid
-
-                });
-
-            }, 300);
-
+            await openRoom(roomId);
 
         } catch (error) {
 
@@ -2165,349 +1582,89 @@ roomForm?.addEventListener(
             );
 
 
-            showMessage(
-                roomMessage,
-                "Could not create room. Please try again."
-            );
+            if (roomMessage) {
+                roomMessage.textContent =
+                    "Could not create room.";
+            }
 
         } finally {
 
-            createRoomSubmit.disabled =
-                false;
-
-            createRoomSubmit.textContent =
-                "Create Room";
-
+            if (createRoomSubmit) {
+                createRoomSubmit.disabled = false;
+            }
         }
-
     }
 );
 
 
 // ======================================================
-// STOP ROOM LISTENERS
+// LOAD MY ROOMS
 // ======================================================
 
-function stopRoomsListeners() {
+function stopRoomsListener() {
 
-    if (unsubscribeOwnedRooms) {
+    if (unsubscribeRooms) {
 
-        unsubscribeOwnedRooms();
+        unsubscribeRooms();
 
-        unsubscribeOwnedRooms = null;
-
+        unsubscribeRooms = null;
     }
-
-
-    if (unsubscribeJoinedRooms) {
-
-        unsubscribeJoinedRooms();
-
-        unsubscribeJoinedRooms = null;
-
-    }
-
 }
 
 
-// ======================================================
-// LOAD USER ROOMS
-// ======================================================
+function loadMyRooms() {
 
-function loadUserRooms(user) {
-
-    stopRoomsListeners();
+    stopRoomsListener();
 
 
-    ownedRoomsCache = [];
-    joinedRoomsCache = [];
+    if (!currentUser) {
 
-
-    if (!user) {
-
-        rooms = [];
-
-        renderRooms();
+        if (roomsList) {
+            roomsList.innerHTML = "";
+        }
 
         return;
-
     }
 
 
-    // ==================================================
-    // OWNED ROOMS
-    // ==================================================
-
     const roomsRef =
-        getRoomsCollection();
-
-
-    const ownedRoomsQuery =
-        query(
-            roomsRef,
-            where(
-                "ownerId",
-                "==",
-                user.uid
-            )
-        );
-
-
-    unsubscribeOwnedRooms =
-        onSnapshot(
-            ownedRoomsQuery,
-
-            snapshot => {
-
-                const ownedRooms =
-                    snapshot.docs.map(
-                        roomDoc => {
-
-                            const data =
-                                roomDoc.data();
-
-
-                            return {
-
-                                id:
-                                    roomDoc.id,
-
-                                name:
-                                    data.name ||
-                                    "Unnamed Room",
-
-                                ownerId:
-                                    data.ownerId ||
-                                    "",
-
-                                roomCode:
-                                    roomDoc.id,
-
-                                createdAt:
-                                    data.createdAt ||
-                                    null
-
-                            };
-
-                        }
-                    );
-
-
-                mergeRooms(
-                    ownedRooms,
-                    null
-                );
-
-            },
-
-            error => {
-
-                console.error(
-                    "Owned rooms error:",
-                    error
-                );
-
-                renderRoomsError();
-
-            }
-        );
-
-
-    // ==================================================
-    // JOINED ROOMS
-    // ==================================================
-
-    const userRoomsRef =
         collection(
             db,
             "userRooms",
-            user.uid,
+            currentUser.uid,
             "rooms"
         );
 
 
-    unsubscribeJoinedRooms =
+    unsubscribeRooms =
         onSnapshot(
-            userRoomsRef,
+            roomsRef,
+            snapshot => {
 
-            async snapshot => {
-
-                const joinedRooms = [];
-
-
-                for (
-                    const memberDoc
-                    of snapshot.docs
-                ) {
-
-                    const data =
-                        memberDoc.data();
+                const rooms =
+                    snapshot.docs.map(
+                        item => ({
+                            id: item.id,
+                            ...item.data()
+                        })
+                    );
 
 
-                    if (!data.roomId) {
-                        continue;
-                    }
-
-
-                    try {
-
-                        const roomSnapshot =
-                            await getDoc(
-                                doc(
-                                    db,
-                                    "rooms",
-                                    data.roomId
-                                )
-                            );
-
-
-                        if (
-                            roomSnapshot.exists()
-                        ) {
-
-                            const roomData =
-                                roomSnapshot.data();
-
-
-                            joinedRooms.push({
-
-                                id:
-                                    roomSnapshot.id,
-
-                                name:
-                                    roomData.name ||
-                                    data.roomName ||
-                                    "Unnamed Room",
-
-                                ownerId:
-                                    roomData.ownerId ||
-                                    "",
-
-                                roomCode:
-                                    roomSnapshot.id,
-
-                                createdAt:
-                                    roomData.createdAt ||
-                                    null
-
-                            });
-
-                        }
-
-                    } catch (error) {
-
-                        console.error(
-                            "Joined room fetch error:",
-                            error
-                        );
-
-                    }
-
-                }
-
-
-                mergeRooms(
-                    null,
-                    joinedRooms
-                );
+                renderRooms(rooms);
 
             },
-
             error => {
 
                 console.error(
-                    "Joined rooms error:",
+                    "Rooms listener error:",
                     error
                 );
 
-            }
-        );
-
-}
-
-
-// ======================================================
-// MERGE ROOMS
-// ======================================================
-
-function mergeRooms(
-    ownedRooms,
-    joinedRooms
-) {
-
-    if (ownedRooms !== null) {
-
-        ownedRoomsCache =
-            ownedRooms;
-
-    }
-
-
-    if (joinedRooms !== null) {
-
-        joinedRoomsCache =
-            joinedRooms;
-
-    }
-
-
-    const roomMap =
-        new Map();
-
-
-    ownedRoomsCache.forEach(
-        room => {
-
-            roomMap.set(
-                room.id,
-                room
-            );
-
-        }
-    );
-
-
-    joinedRoomsCache.forEach(
-        room => {
-
-            if (!roomMap.has(room.id)) {
-
-                roomMap.set(
-                    room.id,
-                    room
+                showToast(
+                    "Could not load rooms."
                 );
-
             }
-
-        }
-    );
-
-
-    rooms =
-        Array.from(
-            roomMap.values()
         );
-
-
-    rooms.sort(
-        (a, b) => {
-
-            const aTime =
-                a.createdAt
-                    ?.toMillis?.() || 0;
-
-            const bTime =
-                b.createdAt
-                    ?.toMillis?.() || 0;
-
-            return bTime - aTime;
-
-        }
-    );
-
-
-    renderRooms();
-
 }
 
 
@@ -2515,303 +1672,127 @@ function mergeRooms(
 // RENDER ROOMS
 // ======================================================
 
-function renderRooms() {
+function renderRooms(rooms = []) {
 
-    if (!roomsList) {
-        return;
-    }
+    if (!roomsList) return;
 
 
     if (!currentUser) {
 
         roomsList.innerHTML = `
-            <div class="rooms-empty">
-
-                <div class="empty-icon">
-                    🔐
-                </div>
-
-                <h2>
-                    Login to view rooms
-                </h2>
-
-                <p>
-                    Create and join collaboration rooms
-                    after logging in.
-                </p>
-
-                <button
-                    class="primary-btn"
-                    id="emptyLoginBtn"
-                >
-                    Login
-                </button>
-
+            <div class="empty-state">
+                Login to see your rooms.
             </div>
         `;
 
-
-        document
-            .getElementById("emptyLoginBtn")
-            ?.addEventListener(
-                "click",
-                () =>
-                    openAuthModal("login")
-            );
-
-
         return;
-
     }
 
 
     if (!rooms.length) {
 
         roomsList.innerHTML = `
-            <div class="rooms-empty">
-
-                <div class="empty-icon">
-                    ▦
-                </div>
-
-                <h2>
-                    No rooms yet
-                </h2>
-
-                <p>
-                    Create a room or join one using a room code.
-                </p>
-
-                <div class="empty-actions">
-
-                    <button
-                        class="primary-btn"
-                        id="emptyCreateRoomBtn"
-                    >
-                        Create Room
-                    </button>
-
-                    <button
-                        class="secondary-btn"
-                        id="emptyJoinRoomBtn"
-                    >
-                        Join Room
-                    </button>
-
-                </div>
-
+            <div class="empty-state">
+                You haven't joined any room yet.
             </div>
         `;
 
-
-        document
-            .getElementById(
-                "emptyCreateRoomBtn"
-            )
-            ?.addEventListener(
-                "click",
-                openRoomModal
-            );
-
-
-        document
-            .getElementById(
-                "emptyJoinRoomBtn"
-            )
-            ?.addEventListener(
-                "click",
-                openJoinRoomModal
-            );
-
-
         return;
-
     }
 
 
     roomsList.innerHTML =
-        rooms.map(room => {
+        rooms.map(room => `
 
-            const isOwner =
-                room.ownerId ===
-                currentUser.uid;
+            <div
+                class="room-card"
+                data-room-id="${room.id}"
+            >
 
-
-            return `
-                <article
-                    class="room-card"
-                >
-
-                    <div
-                        class="room-card-top"
-                    >
-
-                        <div
-                            class="room-card-icon"
-                        >
-                            ▦
-                        </div>
-
-                        ${
-                            isOwner
-                                ? `
-                                    <span class="owner-badge">
-                                        OWNER
-                                    </span>
-                                `
-                                : `
-                                    <span class="member-badge">
-                                        MEMBER
-                                    </span>
-                                `
-                        }
-
-                    </div>
-
+                <div class="room-card-info">
 
                     <h3>
-                        ${escapeHTML(room.name)}
+                        ${escapeHtml(room.roomName || "Unnamed Room")}
                     </h3>
 
-
-                    <div
-                        class="room-code-box"
-                    >
-
-                        <span>
-                            ROOM CODE
-                        </span>
-
+                    <p>
+                        Room Code:
                         <strong>
-                            ${escapeHTML(
-                                room.roomCode
-                            )}
+                            ${escapeHtml(room.id)}
                         </strong>
+                    </p>
 
-                    </div>
+                    <span class="room-role">
+                        ${escapeHtml(room.role || "member")}
+                    </span>
 
+                </div>
 
-                    <div
-                        class="room-card-actions"
+                <div class="room-card-actions">
+
+                    <button
+                        class="copy-room-code"
+                        data-code="${escapeHtml(room.id)}"
+                        type="button"
                     >
+                        Copy Code
+                    </button>
 
-                        <button
-                            class="secondary-btn copy-code-btn"
-                            data-code="${escapeHTML(
-                                room.roomCode
-                            )}"
-                        >
-                            Copy Code
-                        </button>
+                    <button
+                        class="open-room-btn"
+                        data-room-id="${escapeHtml(room.id)}"
+                        type="button"
+                    >
+                        Open
+                    </button>
 
+                </div>
 
-                        <button
-                            class="primary-btn open-room-btn"
-                            data-room-id="${escapeHTML(
-                                room.id
-                            )}"
-                        >
-                            Open
-                        </button>
+            </div>
 
-                    </div>
-
-                </article>
-            `;
-
-        }).join("");
+        `).join("");
 
 
-    document
-        .querySelectorAll(
-            ".copy-code-btn"
-        )
+    roomsList
+        .querySelectorAll(".copy-room-code")
         .forEach(button => {
 
-            button.addEventListener(
+            button?.addEventListener(
                 "click",
                 async () => {
 
-                    await copyText(
-                        button.dataset.code
-                    );
+                    const code =
+                        button.dataset.code;
+
+                    await copyText(code);
 
                     showToast(
                         "Room code copied."
                     );
-
                 }
             );
-
         });
 
 
-    document
-        .querySelectorAll(
-            ".open-room-btn"
-        )
+    roomsList
+        .querySelectorAll(".open-room-btn")
         .forEach(button => {
 
-            button.addEventListener(
+            button?.addEventListener(
                 "click",
-                () => {
+                async () => {
 
-                    const room =
-                        rooms.find(
-                            item =>
-                                item.id ===
-                                button.dataset.roomId
-                        );
-
-
-                    if (room) {
-
-                        openRoom(room);
-
-                    }
-
+                    await openRoom(
+                        button.dataset.roomId
+                    );
                 }
             );
-
         });
-
 }
 
 
 // ======================================================
-// ROOMS ERROR
-// ======================================================
-
-function renderRoomsError() {
-
-    if (!roomsList) {
-        return;
-    }
-
-
-    roomsList.innerHTML = `
-        <div class="rooms-empty">
-
-            <div class="empty-icon">
-                ⚠️
-            </div>
-
-            <h2>
-                Could not load rooms
-            </h2>
-
-            <p>
-                Something went wrong. Please try again.
-            </p>
-
-        </div>
-    `;
-
-}
-
-
-// ======================================================
-// COPY
+// COPY TEXT
 // ======================================================
 
 async function copyText(text) {
@@ -2825,10 +1806,7 @@ async function copyText(text) {
     } catch {
 
         const textarea =
-            document.createElement(
-                "textarea"
-            );
-
+            document.createElement("textarea");
 
         textarea.value = text;
 
@@ -2841,36 +1819,63 @@ async function copyText(text) {
         document.execCommand("copy");
 
         textarea.remove();
-
     }
-
 }
 
 
-document
-    .getElementById(
-        "copyRoomViewCode"
-    )
-    ?.addEventListener(
-        "click",
-        async () => {
+copyRoomViewCode?.addEventListener(
+    "click",
+    async () => {
 
-            if (!currentRoom) {
-                return;
-            }
+        if (!currentRoomId) return;
 
+        await copyText(currentRoomId);
 
-            await copyText(
-                currentRoom.roomCode
-            );
+        showToast(
+            "Room code copied."
+        );
+    }
+);
 
 
-            showToast(
-                "Room code copied."
-            );
+// ======================================================
+// JOIN ROOM MODAL
+// ======================================================
 
-        }
-    );
+function openJoinRoomModal() {
+
+    if (!joinRoomModal) return;
+
+    joinRoomModal.classList.add("active");
+
+    joinRoomMessage &&
+        (joinRoomMessage.textContent = "");
+
+    joinRoomCodeInput?.focus();
+}
+
+
+function closeJoinRoom() {
+
+    joinRoomModal?.classList.remove("active");
+}
+
+
+joinRoomBtn?.addEventListener(
+    "click",
+    () => {
+
+        if (!requireLogin()) return;
+
+        openJoinRoomModal();
+    }
+);
+
+
+closeJoinRoomModal?.addEventListener(
+    "click",
+    closeJoinRoom
+);
 
 
 // ======================================================
@@ -2884,63 +1889,36 @@ joinRoomForm?.addEventListener(
         event.preventDefault();
 
 
-        if (!currentUser) {
-
-            showMessage(
-                joinRoomMessage,
-                "Please login first."
-            );
-
-            return;
-
-        }
+        if (!requireLogin()) return;
 
 
         const roomCode =
-            joinRoomCodeInput.value
+            joinRoomCodeInput?.value
                 .trim()
                 .toUpperCase();
 
 
-        const password =
-            joinRoomPasswordInput.value;
+        const roomPassword =
+            joinRoomPasswordInput?.value;
 
 
-        if (!roomCode) {
+        if (!roomCode || !roomPassword) {
 
-            showMessage(
-                joinRoomMessage,
-                "Please enter the room code."
-            );
-
-            return;
-
-        }
-
-
-        if (!password) {
-
-            showMessage(
-                joinRoomMessage,
-                "Please enter the room password."
-            );
+            if (joinRoomMessage) {
+                joinRoomMessage.textContent =
+                    "Enter room code and password.";
+            }
 
             return;
-
         }
-
-
-        joinRoomSubmit.disabled = true;
-
-        joinRoomSubmit.textContent =
-            "Joining...";
-
-        clearMessage(
-            joinRoomMessage
-        );
 
 
         try {
+
+            if (joinRoomSubmit) {
+                joinRoomSubmit.disabled = true;
+            }
+
 
             const roomRef =
                 doc(
@@ -2951,20 +1929,17 @@ joinRoomForm?.addEventListener(
 
 
             const roomDoc =
-                await getDoc(
-                    roomRef
-                );
+                await getDoc(roomRef);
 
 
             if (!roomDoc.exists()) {
 
-                showMessage(
-                    joinRoomMessage,
-                    "Room not found."
-                );
+                if (joinRoomMessage) {
+                    joinRoomMessage.textContent =
+                        "Room not found.";
+                }
 
                 return;
-
             }
 
 
@@ -2974,22 +1949,21 @@ joinRoomForm?.addEventListener(
 
             const passwordHash =
                 await hashRoomPassword(
-                    password
+                    roomPassword
                 );
 
 
             if (
-                passwordHash !==
-                roomData.passwordHash
+                roomData.passwordHash !==
+                passwordHash
             ) {
 
-                showMessage(
-                    joinRoomMessage,
-                    "Incorrect room password."
-                );
+                if (joinRoomMessage) {
+                    joinRoomMessage.textContent =
+                        "Incorrect room password.";
+                }
 
                 return;
-
             }
 
 
@@ -2997,52 +1971,24 @@ joinRoomForm?.addEventListener(
                 doc(
                     db,
                     "rooms",
-                    roomDoc.id,
+                    roomCode,
                     "members",
                     currentUser.uid
                 );
 
 
-            const existingMember =
-                await getDoc(
-                    memberRef
-                );
-
-
-            let memberRole =
-                "member";
-
-
-            if (
-                existingMember.exists()
-            ) {
-
-                memberRole =
-                    existingMember.data()
-                        .role || "member";
-
-            } else {
-
-                await setDoc(
-                    memberRef,
-                    {
-
-                        uid:
-                            currentUser.uid,
-
-                        email:
-                            currentUser.email,
-
-                        role:
-                            "member",
-
-                        joinedAt:
-                            serverTimestamp()
-
-                    }
-                );
-
-            }
+            await setDoc(
+                memberRef,
+                {
+                    uid: currentUser.uid,
+                    email: currentUser.email,
+                    role: "member",
+                    joinedAt: serverTimestamp()
+                },
+                {
+                    merge: true
+                }
+            );
 
 
             const userRoomRef =
@@ -3051,64 +1997,37 @@ joinRoomForm?.addEventListener(
                     "userRooms",
                     currentUser.uid,
                     "rooms",
-                    roomDoc.id
+                    roomCode
                 );
 
 
             await setDoc(
                 userRoomRef,
                 {
-
-                    roomId:
-                        roomDoc.id,
-
-                    roomName:
-                        roomData.name ||
-                        "Unnamed Room",
-
-                    role:
-                        memberRole,
-
-                    joinedAt:
-                        serverTimestamp()
-
+                    roomId: roomCode,
+                    roomName: roomData.name,
+                    role: "member",
+                    joinedAt: serverTimestamp()
+                },
+                {
+                    merge: true
                 }
             );
 
 
-            closeJoinRoomModalFunction();
+            if (joinRoomForm) {
+                joinRoomForm.reset();
+            }
 
+
+            closeJoinRoom();
 
             showToast(
-                `Joined ${
-                    roomData.name ||
-                    "room"
-                }`
+                `Joined ${roomCode}`
             );
 
 
-            // Clear old room completely
-
-            resetRoomState();
-
-
-            openRoom({
-
-                id:
-                    roomDoc.id,
-
-                name:
-                    roomData.name ||
-                    "Unnamed Room",
-
-                roomCode:
-                    roomDoc.id,
-
-                ownerId:
-                    roomData.ownerId ||
-                    ""
-
-            });
+            await openRoom(roomCode);
 
         } catch (error) {
 
@@ -3118,117 +2037,65 @@ joinRoomForm?.addEventListener(
             );
 
 
-            showMessage(
-                joinRoomMessage,
-                "Could not join room. Please try again."
-            );
+            if (joinRoomMessage) {
+                joinRoomMessage.textContent =
+                    "Could not join room.";
+            }
 
         } finally {
 
-            joinRoomSubmit.disabled =
-                false;
-
-            joinRoomSubmit.textContent =
-                "Join Room";
-
+            if (joinRoomSubmit) {
+                joinRoomSubmit.disabled = false;
+            }
         }
-
     }
 );
 
 
 // ======================================================
-// OPEN ROOM
+// ROOM STATE
 // ======================================================
 
-async function openRoom(room) {
+function stopRoomListeners() {
 
-    if (!currentUser) {
+    if (unsubscribeRoomMembers) {
 
-        openAuthModal();
+        unsubscribeRoomMembers();
 
-        return;
-
+        unsubscribeRoomMembers = null;
     }
 
 
-    /*
-     * VERY IMPORTANT:
-     *
-     * Before opening ANY room,
-     * completely destroy previous room state.
-     */
+    if (unsubscribeRoomTasks) {
 
-    resetRoomState();
+        unsubscribeRoomTasks();
 
-
-    currentRoom = {
-
-        id:
-            room.id,
-
-        name:
-            room.name,
-
-        roomCode:
-            room.roomCode,
-
-        ownerId:
-            room.ownerId
-
-    };
+        unsubscribeRoomTasks = null;
+    }
+}
 
 
-    // Make absolutely sure input is empty
+function clearRoomUI() {
 
     if (sharedTaskInput) {
-
         sharedTaskInput.value = "";
-
     }
 
 
-    // Clear old arrays
-
-    currentRoomMembers = [];
-
-    sharedTasks = [];
+    if (roomViewName) {
+        roomViewName.textContent = "";
+    }
 
 
-    // Update room header
-
-    roomViewName.textContent =
-        currentRoom.name;
-
-
-    roomViewCode.textContent =
-        currentRoom.roomCode;
+    if (roomViewCode) {
+        roomViewCode.textContent = "";
+    }
 
 
-    const isOwner =
-        currentRoom.ownerId ===
-        currentUser.uid;
+    if (roomRoleBadge) {
+        roomRoleBadge.textContent = "";
+    }
 
-
-    roomRoleBadge.textContent =
-        isOwner
-            ? "OWNER"
-            : "MEMBER";
-
-
-    roomRoleBadge.className =
-        isOwner
-            ? "owner-badge"
-            : "member-badge";
-
-
-    deleteRoomBtn.classList.toggle(
-        "hidden",
-        !isOwner
-    );
-
-
-    // Clear lists BEFORE loading new data
 
     if (membersList) {
         membersList.innerHTML = "";
@@ -3240,78 +2107,167 @@ async function openRoom(room) {
     }
 
 
-    memberCount.textContent = "0";
+    if (memberCount) {
+        memberCount.textContent = "0";
+    }
+}
 
 
-    showPage("roomView");
+function resetRoomState() {
 
+    stopRoomListeners();
 
-    // Load ONLY this room
+    currentRoomId = null;
 
-    loadRoomMembers(
-        currentRoom.id
-    );
+    currentRoomData = null;
 
+    currentRoomRole = null;
 
-    loadSharedTasks(
-        currentRoom.id
-    );
-
+    clearRoomUI();
 }
 
 
 // ======================================================
-// BACK TO ROOMS
+// OPEN ROOM
 // ======================================================
 
-document
-    .getElementById(
-        "backToRoomsBtn"
-    )
-    ?.addEventListener(
-        "click",
-        () => {
+async function openRoom(roomId) {
 
-            resetRoomState();
+    if (!requireLogin()) return;
 
-            showPage("rooms");
 
+    try {
+
+        resetRoomState();
+
+
+        const roomRef =
+            doc(
+                db,
+                "rooms",
+                roomId
+            );
+
+
+        const roomDoc =
+            await getDoc(roomRef);
+
+
+        if (!roomDoc.exists()) {
+
+            showToast(
+                "Room no longer exists."
+            );
+
+            return;
         }
-    );
+
+
+        const roomData =
+            roomDoc.data();
+
+
+        const memberRef =
+            doc(
+                db,
+                "rooms",
+                roomId,
+                "members",
+                currentUser.uid
+            );
+
+
+        const memberDoc =
+            await getDoc(memberRef);
+
+
+        if (!memberDoc.exists()) {
+
+            showToast(
+                "You are not a member of this room."
+            );
+
+            return;
+        }
+
+
+        const memberData =
+            memberDoc.data();
+
+
+        currentRoomId =
+            roomId;
+
+        currentRoomData =
+            roomData;
+
+        currentRoomRole =
+            memberData.role || "member";
+
+
+        if (roomViewName) {
+            roomViewName.textContent =
+                roomData.name || "Room";
+        }
+
+
+        if (roomViewCode) {
+            roomViewCode.textContent =
+                roomId;
+        }
+
+
+        if (roomRoleBadge) {
+            roomRoleBadge.textContent =
+                currentRoomRole;
+        }
+
+
+        if (deleteRoomBtn) {
+
+            deleteRoomBtn.style.display =
+                currentRoomRole === "owner"
+                    ? ""
+                    : "none";
+        }
+
+
+        showPage("roomView");
+
+
+        // Re-set room page active because showPage()
+        // clears room state when leaving normal pages.
+        roomViewPage?.classList.add("active");
+
+
+        loadRoomMembers(roomId);
+
+        loadSharedTasks(roomId);
+
+    } catch (error) {
+
+        console.error(
+            "Open room error:",
+            error
+        );
+
+        showToast(
+            "Could not open room."
+        );
+    }
+}
 
 
 // ======================================================
 // ROOM MEMBERS
 // ======================================================
 
-function loadRoomMembers(
-    roomId
-) {
+function loadRoomMembers(roomId) {
 
-    // Stop any previous listener
-
-    if (unsubscribeMembers) {
-
-        unsubscribeMembers();
-
-        unsubscribeMembers = null;
-
-    }
+    if (!roomId) return;
 
 
-    // Clear previous member data
-
-    currentRoomMembers = [];
-
-
-    if (membersList) {
-        membersList.innerHTML = "";
-    }
-
-
-    if (memberCount) {
-        memberCount.textContent = "0";
-    }
+    stopMemberListenerOnly();
 
 
     const membersRef =
@@ -3323,279 +2279,115 @@ function loadRoomMembers(
         );
 
 
-    unsubscribeMembers =
+    unsubscribeRoomMembers =
         onSnapshot(
             membersRef,
-
             snapshot => {
 
-                /*
-                 * Safety check:
-                 * Ignore snapshot if user has already
-                 * moved to another room.
-                 */
-
-                if (
-                    !currentRoom ||
-                    currentRoom.id !== roomId
-                ) {
-
-                    return;
-
-                }
-
-
-                currentRoomMembers =
+                const members =
                     snapshot.docs.map(
-                        memberDoc => {
-
-                            const data =
-                                memberDoc.data();
-
-
-                            return {
-
-                                id:
-                                    memberDoc.id,
-
-                                uid:
-                                    data.uid ||
-                                    memberDoc.id,
-
-                                email:
-                                    data.email ||
-                                    "Unknown",
-
-                                role:
-                                    data.role ||
-                                    "member",
-
-                                joinedAt:
-                                    data.joinedAt ||
-                                    null
-
-                            };
-
-                        }
+                        item => ({
+                            id: item.id,
+                            ...item.data()
+                        })
                     );
 
 
-                currentRoomMembers.sort(
-                    (a, b) => {
-
-                        if (
-                            a.role ===
-                            "owner"
-                        ) {
-
-                            return -1;
-
-                        }
-
-
-                        if (
-                            b.role ===
-                            "owner"
-                        ) {
-
-                            return 1;
-
-                        }
-
-
-                        return 0;
-
-                    }
-                );
-
-
-                renderMembers();
+                renderMembers(members);
 
             },
-
             error => {
 
-                /*
-                 * Ignore errors from old room
-                 * after user has already left it.
-                 */
-
-                if (
-                    !currentRoom ||
-                    currentRoom.id !== roomId
-                ) {
-
-                    return;
-
-                }
-
-
                 console.error(
-                    "Members error:",
+                    "Members listener error:",
                     error
                 );
 
-
-                if (membersList) {
-
-                    membersList.innerHTML = `
-                        <div class="empty-inline">
-                            Could not load members.
-                        </div>
-                    `;
-
-                }
-
+                showToast(
+                    "Could not load members."
+                );
             }
         );
-
 }
 
 
-// ======================================================
-// RENDER MEMBERS
-// ======================================================
+function stopMemberListenerOnly() {
 
-function renderMembers() {
+    if (unsubscribeRoomMembers) {
 
-    if (!membersList) {
-        return;
+        unsubscribeRoomMembers();
+
+        unsubscribeRoomMembers = null;
+    }
+}
+
+
+function renderMembers(members) {
+
+    if (!membersList) return;
+
+
+    if (memberCount) {
+        memberCount.textContent =
+            members.length;
     }
 
 
-    if (!currentRoom) {
-        return;
-    }
-
-
-    memberCount.textContent =
-        currentRoomMembers.length;
-
-
-    if (
-        !currentRoomMembers.length
-    ) {
+    if (!members.length) {
 
         membersList.innerHTML = `
-            <div class="empty-inline">
-                No members found.
+            <div class="empty-state">
+                No members.
             </div>
         `;
 
         return;
-
     }
 
 
     membersList.innerHTML =
-        currentRoomMembers
-            .map(member => {
+        members.map(member => `
 
-                const isMe =
-                    member.uid ===
-                    currentUser?.uid;
+            <div class="member-item">
 
+                <div class="member-avatar">
+                    ${(member.email || "?")
+                        .charAt(0)
+                        .toUpperCase()}
+                </div>
 
-                const email =
-                    escapeHTML(
-                        member.email
-                    );
+                <div class="member-info">
 
+                    <strong>
+                        ${escapeHtml(
+                            member.email || "Unknown"
+                        )}
+                    </strong>
 
-                const initial =
-                    escapeHTML(
-                        (
-                            member.email ||
-                            "U"
-                        )
-                            .charAt(0)
-                            .toUpperCase()
-                    );
+                    <span>
+                        ${escapeHtml(
+                            member.role || "member"
+                        )}
+                    </span>
 
+                </div>
 
-                return `
-                    <div
-                        class="member-item"
-                    >
+            </div>
 
-                        <div
-                            class="member-avatar"
-                        >
-                            ${initial}
-                        </div>
-
-
-                        <div
-                            class="member-info"
-                        >
-
-                            <strong>
-                                ${email}
-                            </strong>
-
-                            <span>
-                                ${
-                                    member.role ===
-                                    "owner"
-                                        ? "Room Owner"
-                                        : "Member"
-                                }
-
-                                ${
-                                    isMe
-                                        ? " · You"
-                                        : ""
-                                }
-                            </span>
-
-                        </div>
-
-
-                        ${
-                            member.role ===
-                            "owner"
-                                ? `
-                                    <span class="owner-mini">
-                                        OWNER
-                                    </span>
-                                `
-                                : ""
-                        }
-
-                    </div>
-                `;
-
-            })
-            .join("");
-
+        `).join("");
 }
 
 
 // ======================================================
-// SHARED TASKS
+// SHARED ROOM TASKS
 // ======================================================
 
-function loadSharedTasks(
-    roomId
-) {
+function loadSharedTasks(roomId) {
 
-    if (unsubscribeSharedTasks) {
-
-        unsubscribeSharedTasks();
-
-        unsubscribeSharedTasks = null;
-
-    }
+    if (!roomId) return;
 
 
-    // Clear previous tasks
-
-    sharedTasks = [];
-
-
-    if (sharedTasksList) {
-        sharedTasksList.innerHTML = "";
-    }
+    stopSharedTaskListenerOnly();
 
 
     const tasksRef =
@@ -3607,118 +2399,53 @@ function loadSharedTasks(
         );
 
 
-    unsubscribeSharedTasks =
-        onSnapshot(
+    const q =
+        query(
             tasksRef,
+            orderBy("createdAt", "desc")
+        );
 
+
+    unsubscribeRoomTasks =
+        onSnapshot(
+            q,
             snapshot => {
 
-                /*
-                 * IMPORTANT:
-                 * If snapshot belongs to old room,
-                 * completely ignore it.
-                 */
-
-                if (
-                    !currentRoom ||
-                    currentRoom.id !== roomId
-                ) {
-
-                    return;
-
-                }
-
-
-                sharedTasks =
+                const tasks =
                     snapshot.docs.map(
-                        taskDoc => {
-
-                            const data =
-                                taskDoc.data();
-
-
-                            return {
-
-                                id:
-                                    taskDoc.id,
-
-                                text:
-                                    data.text ||
-                                    "",
-
-                                completed:
-                                    data.completed === true,
-
-                                createdBy:
-                                    data.createdBy ||
-                                    "",
-
-                                createdByEmail:
-                                    data.createdByEmail ||
-                                    "",
-
-                                createdAt:
-                                    data.createdAt ||
-                                    null
-
-                            };
-
-                        }
+                        item => ({
+                            id: item.id,
+                            ...item.data()
+                        })
                     );
 
 
-                sharedTasks.sort(
-                    (a, b) => {
-
-                        const aTime =
-                            a.createdAt
-                                ?.toMillis?.() || 0;
-
-                        const bTime =
-                            b.createdAt
-                                ?.toMillis?.() || 0;
-
-                        return bTime - aTime;
-
-                    }
-                );
-
-
-                renderSharedTasks();
+                renderSharedTasks(tasks);
 
             },
-
             error => {
 
-                if (
-                    !currentRoom ||
-                    currentRoom.id !== roomId
-                ) {
-
-                    return;
-
-                }
-
-
                 console.error(
-                    "Shared tasks error:",
+                    "Shared task listener error:",
                     error
                 );
 
-
-                if (sharedTasksList) {
-
-                    sharedTasksList.innerHTML = `
-                        <div class="empty-inline">
-                            Could not load shared tasks.
-                        </div>
-                    `;
-
-                }
-
+                showToast(
+                    "Could not load room tasks."
+                );
             }
         );
+}
 
+
+function stopSharedTaskListenerOnly() {
+
+    if (unsubscribeRoomTasks) {
+
+        unsubscribeRoomTasks();
+
+        unsubscribeRoomTasks = null;
+    }
 }
 
 
@@ -3726,114 +2453,119 @@ function loadSharedTasks(
 // RENDER SHARED TASKS
 // ======================================================
 
-function renderSharedTasks() {
+function renderSharedTasks(tasks) {
 
-    if (!sharedTasksList) {
-        return;
-    }
+    if (!sharedTasksList) return;
 
 
-    if (!currentRoom) {
-
-        sharedTasksList.innerHTML = "";
-
-        return;
-
-    }
-
-
-    if (!sharedTasks.length) {
+    if (!tasks.length) {
 
         sharedTasksList.innerHTML = `
-            <div class="empty-state compact">
-
-                <div class="empty-icon">
-                    ✓
-                </div>
-
-                <h3>
-                    No shared tasks
-                </h3>
-
-                <p>
-                    Add the first task for this room.
-                </p>
-
+            <div class="empty-state">
+                No shared tasks yet.
             </div>
         `;
 
         return;
-
     }
 
 
     sharedTasksList.innerHTML =
-        sharedTasks
-            .map(task => {
+        tasks.map(task => `
 
-                return `
-                    <div
-                        class="task-item ${
+            <div
+                class="shared-task ${
+                    task.completed
+                        ? "completed"
+                        : ""
+                }"
+                data-task-id="${task.id}"
+            >
+
+                <label class="task-check">
+
+                    <input
+                        type="checkbox"
+                        class="shared-task-check"
+                        data-id="${task.id}"
+                        ${
                             task.completed
-                                ? "completed"
+                                ? "checked"
                                 : ""
-                        }"
+                        }
                     >
 
-                        <button
-                            class="task-check shared-task-toggle"
-                            data-id="${escapeHTML(
-                                task.id
-                            )}"
-                        >
-                            ${
-                                task.completed
-                                    ? "✓"
-                                    : ""
-                            }
-                        </button>
+                    <span></span>
+
+                </label>
 
 
-                        <div
-                            class="shared-task-content"
-                        >
+                <div class="task-content">
 
-                            <span
-                                class="task-text"
-                            >
-                                ${escapeHTML(
-                                    task.text
-                                )}
-                            </span>
+                    <div class="task-text">
+                        ${escapeHtml(task.text)}
+                    </div>
 
+                    <div class="task-date">
 
-                            <small>
-                                ${
-                                    escapeHTML(
-                                        task.createdByEmail ||
-                                        "Room member"
-                                    )
-                                }
-                            </small>
+                        ${escapeHtml(
+                            task.createdByEmail || ""
+                        )}
 
-                        </div>
-
-
-                        <button
-                            class="task-delete shared-task-delete"
-                            data-id="${escapeHTML(
-                                task.id
-                            )}"
-                        >
-                            ×
-                        </button>
+                        •
+                        ${formatDate(
+                            task.createdAt
+                        )}
 
                     </div>
-                `;
 
-            })
-            .join("");
+                </div>
 
+
+                <button
+                    type="button"
+                    class="shared-task-delete"
+                    data-id="${task.id}"
+                >
+                    ×
+                </button>
+
+            </div>
+
+        `).join("");
+
+
+    sharedTasksList
+        .querySelectorAll(".shared-task-check")
+        .forEach(input => {
+
+            input?.addEventListener(
+                "change",
+                async () => {
+
+                    await toggleSharedTask(
+                        input.dataset.id,
+                        input.checked
+                    );
+                }
+            );
+        });
+
+
+    sharedTasksList
+        .querySelectorAll(".shared-task-delete")
+        .forEach(button => {
+
+            button?.addEventListener(
+                "click",
+                async () => {
+
+                    await deleteSharedTask(
+                        button.dataset.id
+                    );
+                }
+            );
+        });
 }
 
 
@@ -3848,33 +2580,28 @@ sharedTaskForm?.addEventListener(
         event.preventDefault();
 
 
-        if (
-            !currentUser ||
-            !currentRoom
-        ) {
+        if (!requireLogin()) return;
 
-            return;
-
-        }
-
-
-        /*
-         * Save the room ID at this exact moment.
-         * This prevents a fast room switch from
-         * accidentally adding the task to another room.
-         */
 
         const roomId =
-            currentRoom.id;
+            currentRoomId;
 
 
         const text =
-            sharedTaskInput.value.trim();
+            sharedTaskInput?.value.trim();
 
 
-        if (!text) {
+        if (!roomId) {
+
+            showToast(
+                "No room selected."
+            );
+
             return;
         }
+
+
+        if (!text) return;
 
 
         try {
@@ -3887,37 +2614,19 @@ sharedTaskForm?.addEventListener(
                     "tasks"
                 ),
                 {
-
                     text,
-
-                    completed:
-                        false,
-
-                    createdBy:
-                        currentUser.uid,
-
+                    completed: false,
+                    createdBy: currentUser.uid,
                     createdByEmail:
                         currentUser.email,
-
                     createdAt:
                         serverTimestamp()
-
                 }
             );
 
 
-            /*
-             * Only clear the input if the user
-             * is still inside the same room.
-             */
-
-            if (
-                currentRoom &&
-                currentRoom.id === roomId
-            ) {
-
+            if (sharedTaskInput) {
                 sharedTaskInput.value = "";
-
             }
 
 
@@ -3928,17 +2637,14 @@ sharedTaskForm?.addEventListener(
         } catch (error) {
 
             console.error(
-                "Shared task add error:",
+                "Shared task error:",
                 error
             );
-
 
             showToast(
                 "Could not add shared task."
             );
-
         }
-
     }
 );
 
@@ -3947,105 +2653,78 @@ sharedTaskForm?.addEventListener(
 // SHARED TASK ACTIONS
 // ======================================================
 
-sharedTasksList?.addEventListener(
-    "click",
-    async event => {
+async function toggleSharedTask(
+    taskId,
+    completed
+) {
 
-        const button =
-            event.target.closest("button");
-
-
-        if (
-            !button ||
-            !currentRoom
-        ) {
-
-            return;
-
-        }
+    const roomId =
+        currentRoomId;
 
 
-        const roomId =
-            currentRoom.id;
+    if (!roomId) return;
 
 
-        const taskId =
-            button.dataset.id;
+    try {
 
-
-        const task =
-            sharedTasks.find(
-                item =>
-                    item.id === taskId
-            );
-
-
-        if (!task) {
-            return;
-        }
-
-
-        try {
-
-            if (
-                button.classList.contains(
-                    "shared-task-toggle"
-                )
-            ) {
-
-                await updateDoc(
-                    doc(
-                        db,
-                        "rooms",
-                        roomId,
-                        "tasks",
-                        task.id
-                    ),
-                    {
-
-                        completed:
-                            !task.completed
-
-                    }
-                );
-
+        await updateDoc(
+            doc(
+                db,
+                "rooms",
+                roomId,
+                "tasks",
+                taskId
+            ),
+            {
+                completed
             }
+        );
 
+    } catch (error) {
 
-            if (
-                button.classList.contains(
-                    "shared-task-delete"
-                )
-            ) {
+        console.error(error);
 
-                await deleteDoc(
-                    doc(
-                        db,
-                        "rooms",
-                        roomId,
-                        "tasks",
-                        task.id
-                    )
-                );
-
-            }
-
-        } catch (error) {
-
-            console.error(
-                "Shared task update error:",
-                error
-            );
-
-
-            showToast(
-                "Could not update shared task."
-            );
-
-        }
-
+        showToast(
+            "Could not update shared task."
+        );
     }
-);
+}
+
+
+async function deleteSharedTask(taskId) {
+
+    const roomId =
+        currentRoomId;
+
+
+    if (!roomId) return;
+
+
+    try {
+
+        await deleteDoc(
+            doc(
+                db,
+                "rooms",
+                roomId,
+                "tasks",
+                taskId
+            )
+        );
+
+        showToast(
+            "Shared task deleted."
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        showToast(
+            "Could not delete shared task."
+        );
+    }
+}
 
 
 // ======================================================
@@ -4056,45 +2735,13 @@ leaveRoomBtn?.addEventListener(
     "click",
     async () => {
 
-        if (
-            !currentRoom ||
-            !currentUser
-        ) {
-
+        if (!currentRoomId || !currentUser) {
             return;
-
         }
 
 
         const roomId =
-            currentRoom.id;
-
-
-        const isOwner =
-            currentRoom.ownerId ===
-            currentUser.uid;
-
-
-        if (isOwner) {
-
-            showToast(
-                "Room owners cannot leave. Delete the room instead."
-            );
-
-            return;
-
-        }
-
-
-        const confirmed =
-            window.confirm(
-                "Leave this room?"
-            );
-
-
-        if (!confirmed) {
-            return;
-        }
+            currentRoomId;
 
 
         try {
@@ -4121,13 +2768,9 @@ leaveRoomBtn?.addEventListener(
             );
 
 
-            // Completely clear room
-
             resetRoomState();
 
-
             showPage("rooms");
-
 
             showToast(
                 "You left the room."
@@ -4140,13 +2783,10 @@ leaveRoomBtn?.addEventListener(
                 error
             );
 
-
             showToast(
                 "Could not leave room."
             );
-
         }
-
     }
 );
 
@@ -4159,50 +2799,30 @@ deleteRoomBtn?.addEventListener(
     "click",
     async () => {
 
+        if (!currentRoomId || !currentUser) {
+            return;
+        }
+
+
         if (
-            !currentRoom ||
-            !currentUser ||
-            currentRoom.ownerId !==
-                currentUser.uid
+            currentRoomRole !== "owner"
         ) {
 
-            return;
-
-        }
-
-
-        const confirmed =
-            window.confirm(
-                "Delete this room? This cannot be undone."
+            showToast(
+                "Only the owner can delete the room."
             );
 
-
-        if (!confirmed) {
             return;
         }
+
+
+        const roomId =
+            currentRoomId;
 
 
         try {
 
-            const roomId =
-                currentRoom.id;
-
-
-            // Get members
-
-            const membersSnapshot =
-                await getDocs(
-                    collection(
-                        db,
-                        "rooms",
-                        roomId,
-                        "members"
-                    )
-                );
-
-
-            // Get tasks
-
+            // Delete room tasks
             const tasksSnapshot =
                 await getDocs(
                     collection(
@@ -4214,48 +2834,6 @@ deleteRoomBtn?.addEventListener(
                 );
 
 
-            // Delete user room references
-
-            for (
-                const memberDoc
-                of membersSnapshot.docs
-            ) {
-
-                const memberData =
-                    memberDoc.data();
-
-
-                if (!memberData.uid) {
-                    continue;
-                }
-
-
-                try {
-
-                    await deleteDoc(
-                        doc(
-                            db,
-                            "userRooms",
-                            memberData.uid,
-                            "rooms",
-                            roomId
-                        )
-                    );
-
-                } catch (error) {
-
-                    console.warn(
-                        "Could not remove user room reference:",
-                        error
-                    );
-
-                }
-
-            }
-
-
-            // Delete shared tasks
-
             for (
                 const taskDoc
                 of tasksSnapshot.docs
@@ -4264,11 +2842,20 @@ deleteRoomBtn?.addEventListener(
                 await deleteDoc(
                     taskDoc.ref
                 );
-
             }
 
 
-            // Delete members
+            // Delete room members
+            const membersSnapshot =
+                await getDocs(
+                    collection(
+                        db,
+                        "rooms",
+                        roomId,
+                        "members"
+                    )
+                );
+
 
             for (
                 const memberDoc
@@ -4278,12 +2865,26 @@ deleteRoomBtn?.addEventListener(
                 await deleteDoc(
                     memberDoc.ref
                 );
-
             }
 
 
-            // Delete room
+            // Delete user room reference
+            const userRoomRef =
+                doc(
+                    db,
+                    "userRooms",
+                    currentUser.uid,
+                    "rooms",
+                    roomId
+                );
 
+
+            await deleteDoc(
+                userRoomRef
+            );
+
+
+            // Delete room itself
             await deleteDoc(
                 doc(
                     db,
@@ -4293,13 +2894,9 @@ deleteRoomBtn?.addEventListener(
             );
 
 
-            // Completely clear room state
-
             resetRoomState();
 
-
             showPage("rooms");
-
 
             showToast(
                 "Room deleted."
@@ -4312,72 +2909,107 @@ deleteRoomBtn?.addEventListener(
                 error
             );
 
-
             showToast(
                 "Could not delete room."
             );
-
         }
-
     }
 );
 
 
 // ======================================================
-// ROOM LISTENER CLEANUP
+// BACK TO ROOMS
 // ======================================================
 
-function stopRoomListeners() {
+backToRoomsBtn?.addEventListener(
+    "click",
+    () => {
 
-    if (unsubscribeMembers) {
+        resetRoomState();
 
-        unsubscribeMembers();
-
-        unsubscribeMembers = null;
-
+        showPage("rooms");
     }
+);
 
 
-    if (unsubscribeSharedTasks) {
+// ======================================================
+// AUTH STATE
+// ======================================================
 
-        unsubscribeSharedTasks();
+onAuthStateChanged(
+    auth,
+    user => {
 
-        unsubscribeSharedTasks = null;
+        currentUser =
+            user;
 
+
+        updateAuthButton();
+
+
+        if (user) {
+
+            loadPersonalTasks(user);
+
+            loadMyRooms();
+
+        } else {
+
+            loadPersonalTasks(null);
+
+            stopRoomsListener();
+
+            if (roomsList) {
+
+                roomsList.innerHTML = `
+                    <div class="empty-state">
+                        Login to see your rooms.
+                    </div>
+                `;
+            }
+        }
+
+
+        updateDashboard();
     }
-
-}
+);
 
 
 // ======================================================
 // MODAL OUTSIDE CLICK
 // ======================================================
 
-[
-    authModal,
-    roomModal,
-    joinRoomModal
-].forEach(modal => {
+authModal?.addEventListener(
+    "click",
+    event => {
 
-    modal?.addEventListener(
-        "click",
-        event => {
-
-            if (
-                event.target ===
-                modal
-            ) {
-
-                modal.classList.add(
-                    "hidden"
-                );
-
-            }
-
+        if (event.target === authModal) {
+            closeAuth();
         }
-    );
+    }
+);
 
-});
+
+roomModal?.addEventListener(
+    "click",
+    event => {
+
+        if (event.target === roomModal) {
+            closeRoom();
+        }
+    }
+);
+
+
+joinRoomModal?.addEventListener(
+    "click",
+    event => {
+
+        if (event.target === joinRoomModal) {
+            closeJoinRoom();
+        }
+    }
+);
 
 
 // ======================================================
@@ -4388,28 +3020,16 @@ document.addEventListener(
     "keydown",
     event => {
 
-        if (
-            event.key !==
-            "Escape"
-        ) {
-
+        if (event.key !== "Escape") {
             return;
-
         }
 
 
-        authModal?.classList.add(
-            "hidden"
-        );
+        closeAuth();
 
-        roomModal?.classList.add(
-            "hidden"
-        );
+        closeRoom();
 
-        joinRoomModal?.classList.add(
-            "hidden"
-        );
-
+        closeJoinRoom();
     }
 );
 
@@ -4424,9 +3044,4 @@ updateDashboard();
 
 renderRooms();
 
-loadPersonalTasks(null);
-updateDashboard();
-renderRooms();
-
-// Open My Tasks first
 showPage("tasks");
