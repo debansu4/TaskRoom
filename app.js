@@ -3526,41 +3526,23 @@ backToRoomsBtn?.addEventListener(
 );
 
 
-// ======================================================
-// AUTH STATE
-// ======================================================
-
 onAuthStateChanged(
     auth,
     async user => {
 
-        // --------------------------------------------------
-        // BLOCK UNVERIFIED USERS
-        // --------------------------------------------------
+        // ==========================================
+        // NO USER
+        // ==========================================
 
-        if (user && !user.emailVerified) {
+        if (!user) {
 
             currentUser = null;
-
-            stopPersonalTaskListener();
-            stopRoomsListener();
-
-            try {
-
-                await signOut(auth);
-
-            } catch (error) {
-
-                console.error(
-                    "Unverified user sign out error:",
-                    error
-                );
-            }
-
 
             updateAuthButton();
 
             loadPersonalTasks(null);
+
+            stopRoomsListener();
 
             renderRooms([]);
 
@@ -3570,41 +3552,89 @@ onAuthStateChanged(
         }
 
 
-        // --------------------------------------------------
-        // VERIFIED USER / LOGGED OUT
-        // --------------------------------------------------
+        // ==========================================
+        // CHECK EMAIL VERIFICATION
+        // ==========================================
 
-        currentUser =
-            user;
+        try {
+
+            // Get latest Firebase user data
+            await user.reload();
+
+            const freshUser = auth.currentUser;
 
 
-        updateAuthButton();
+            // ======================================
+            // UNVERIFIED USER
+            // ======================================
+
+            if (
+                !freshUser ||
+                !freshUser.emailVerified
+            ) {
+
+                await signOut(auth);
+
+                currentUser = null;
+
+                updateAuthButton();
+
+                loadPersonalTasks(null);
+
+                stopRoomsListener();
+
+                renderRooms([]);
+
+                updateDashboard();
+
+                showToast(
+                    "Please verify your email before logging in."
+                );
+
+                return;
+            }
 
 
-        if (user) {
+            // ======================================
+            // VERIFIED USER
+            // ======================================
+
+            currentUser =
+                freshUser;
+
+            updateAuthButton();
 
             loadPersonalTasks(
-                user
+                freshUser
             );
 
             loadMyRooms();
 
-        } else {
+            updateDashboard();
 
-            loadPersonalTasks(
-                null
+        } catch (error) {
+
+            console.error(
+                "Auth state verification error:",
+                error
             );
+
+            await signOut(auth);
+
+            currentUser = null;
+
+            updateAuthButton();
+
+            loadPersonalTasks(null);
 
             stopRoomsListener();
 
             renderRooms([]);
+
+            updateDashboard();
         }
-
-
-        updateDashboard();
     }
 );
-
 // ======================================================
 // MODAL OUTSIDE CLICK
 // ======================================================
