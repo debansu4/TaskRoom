@@ -11,7 +11,8 @@ import {
     createUserWithEmailAndPassword,
     signInWithEmailAndPassword,
     signOut,
-    sendEmailVerification
+    sendEmailVerification,
+    updateProfile
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 
 import {
@@ -205,7 +206,12 @@ const authMessage =
 const authSwitch =
     document.getElementById("authSwitch");
 
+const nameInputGroup =
+    document.getElementById("nameInputGroup");
 
+const nameInput =
+    document.getElementById("nameInput");
+    
 // Create room modal
 const roomModal =
     document.getElementById("roomModal");
@@ -1235,11 +1241,8 @@ function updateDashboard() {
 
         if (currentUser) {
 
-            dashboardGreeting.textContent =
-                `Welcome back, ${
-                    currentUser.email || ""
-                }`;
-
+           dashboardGreeting.textContent =
+                `Welcome back, ${currentUser.displayName || currentUser.email || ""}`;
         } else {
 
             dashboardGreeting.textContent =
@@ -1368,55 +1371,65 @@ closeAuthModal?.addEventListener(
 // AUTH MODE
 // ======================================================
 
+// ======================================================
+// AUTH MODE
+// ======================================================
+
 function updateAuthModeUI() {
 
     if (authMode === "login") {
 
         if (authTitle) {
-            authTitle.textContent =
-                "Welcome Back";
+            authTitle.textContent = "Welcome Back";
         }
 
         if (authSubtitle) {
-            authSubtitle.textContent =
-                "Login to continue to TaskRoom";
+            authSubtitle.textContent = "Login to continue to TaskRoom";
         }
 
         if (authSubmit) {
-            authSubmit.textContent =
-                "Login";
+            authSubmit.textContent = "Login";
         }
 
         if (authSwitch) {
-            authSwitch.textContent =
-                "Create an account";
+            authSwitch.textContent = "Create an account";
+        }
+        
+        // লগইনের সময় Username লুকানো থাকবে
+        if (nameInputGroup) {
+            nameInputGroup.classList.add("hidden");
+        }
+        if (nameInput) {
+            nameInput.required = false;
         }
 
     } else {
 
         if (authTitle) {
-            authTitle.textContent =
-                "Create Account";
+            authTitle.textContent = "Create Account";
         }
 
         if (authSubtitle) {
-            authSubtitle.textContent =
-                "Create your TaskRoom account";
+            authSubtitle.textContent = "Create your TaskRoom account";
         }
 
         if (authSubmit) {
-            authSubmit.textContent =
-                "Sign Up";
+            authSubmit.textContent = "Sign Up";
         }
 
         if (authSwitch) {
-            authSwitch.textContent =
-                "Already have an account?";
+            authSwitch.textContent = "Already have an account?";
+        }
+        
+        // সাইন আপের সময় Username দেখাতে হবে
+        if (nameInputGroup) {
+            nameInputGroup.classList.remove("hidden");
+        }
+        if (nameInput) {
+            nameInput.required = true;
         }
     }
 }
-
-
 authSwitch?.addEventListener(
     "click",
     () => {
@@ -1433,7 +1446,6 @@ authSwitch?.addEventListener(
         }
     }
 );
-
 
 // ======================================================
 // AUTH FORM
@@ -1519,7 +1531,13 @@ authForm?.addEventListener(
                     password
                 );
 
-
+// --- এই নতুন অংশটুকু যোগ করো (নাম সেভ করার জন্য) ---
+            const userName = document.getElementById("nameInput")?.value.trim();
+            if (userName) {
+                await updateProfile(result.user, {
+                    displayName: userName
+                });
+            }
             // Send verification email
             await sendEmailVerification(
                 result.user
@@ -1856,6 +1874,8 @@ roomForm?.addEventListener(
 
                     email:
                         currentUser.email,
+
+                    displayName: currentUser.displayName || "",
 
                     role:
                         "owner",
@@ -2431,7 +2451,7 @@ joinRoomForm?.addEventListener(
             }
 
 
-            // Add member
+           // Add member
             await setDoc(
                 doc(
                     db,
@@ -2446,6 +2466,9 @@ joinRoomForm?.addEventListener(
 
                     email:
                         currentUser.email,
+                        
+                    // --- এই লাইনটা মিস হয়ে গেছে ---
+                    displayName: currentUser.displayName || "", 
 
                     role:
                         "member",
@@ -2457,7 +2480,6 @@ joinRoomForm?.addEventListener(
                     merge: true
                 }
             );
-
 
             // Add room to user's list
             await setDoc(
@@ -2867,48 +2889,30 @@ function renderMembers(
     }
 
 
-    membersList.innerHTML =
+    
+     membersList.innerHTML =
         members.map(member => {
 
-            const email =
-                member.email ||
-                "Unknown";
+            // এখানে email এর বদলে displayName নিচ্ছি
+            const displayName = member.displayName || member.email || "Unknown";
 
             const initial =
-                email
-                    .charAt(0)
-                    .toUpperCase();
-
+                displayName.charAt(0).toUpperCase();
 
             return `
-
                 <div class="member-item">
-
                     <div class="member-avatar">
-                        ${escapeHtml(
-                            initial
-                        )}
+                        ${escapeHtml(initial)}
                     </div>
-
                     <div class="member-info">
-
                         <strong>
-                            ${escapeHtml(
-                                email
-                            )}
+                            ${escapeHtml(displayName)} <!-- এখানে নাম দেখাবে -->
                         </strong>
-
                         <span>
-                            ${escapeHtml(
-                                member.role ||
-                                "member"
-                            )}
+                            ${escapeHtml(member.role || "member")}
                         </span>
-
                     </div>
-
                 </div>
-
             `;
         }).join("");
 }
@@ -3191,7 +3195,7 @@ sharedTaskForm?.addEventListener(
                         currentUser.uid,
 
                     createdByEmail:
-                        currentUser.email,
+                       currentUser.displayName || currentUser.email,
 
                     createdAt:
                         serverTimestamp()
